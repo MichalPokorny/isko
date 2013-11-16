@@ -1,0 +1,26 @@
+body {
+	font-family: sans-serif;
+}
+.faded .slot {
+	background-color: #e3e3e3;
+	color: #777;
+	border-color: #333;
+}
+.slot {
+	background-color: #ddd;
+	border: 1px solid black;
+	font-size: 10px;
+}
+.slot-container {
+	position: relative;
+	width: 100%;
+	height: 600px;
+	border: 1px solid black;
+	background-color: #eee;
+}
+.slot-cviceni {
+	background-color: #ddf;
+}
+.slot-prednaska {
+	background-color: #fdd;
+}

@@ -1,0 +1,20 @@
+**isko**
+Tohle je silne provizorni sada skriptu, kterou automatizuju nektere bezne veci, ktere chci vedet od SISu.
+Nikdo by ji nemel pouzivat (i kdyby to nebylo zabugovane, je to porad zakazane :).
+
+Ma to nejake zavislosti - prinejmensim Mechanize. Mozna z toho nekdy bude gem, ale to bych se musel dost nudit.
+
+Ocekava to heslo do SISu ulozene v ~/.sis-credentials.yml:
+
+	---
+	login: "123123123"
+	password: "MojeSuperHeslo"
+
+**Autor**
+Michal 'prvak' Pokorny (pok@rny.cz)
+
+**Dokumentace**
+Neni a nejspis ani nikdy nebude.
+
+**Licence**
+GPL 3.0
