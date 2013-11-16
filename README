@@ -16,5 +16,11 @@ Michal 'prvak' Pokorny (pok@rny.cz)
 **Dokumentace**
 Neni a nejspis ani nikdy nebude.
 
+Umi to ale (v dobe posledniho updatu tohohle souboru) tohle:
+
+ * Generovat dobry rozvrh vc. vyberu predmetu a automatickeho stazeni rozvrhu ze SISu podle zadanych podminek a cilove funkce.
+ * Spocitat kreditove vazeny prumer.
+ * Vypsat vsechny instance nejakeho slotu (bez instanci, ktere jsou treba zruseny kvuli prazdninam).
+
 **Licence**
 GPL 3.0
