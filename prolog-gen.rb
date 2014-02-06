@@ -10,7 +10,6 @@ class PrologGen
 
 		@prolog = File.open(prolog_path, "w")
 		@prolog << <<EOF
-#!/usr/bin/swipl -q -t main -f
 :-use_module(library(clpfd)).
 main :-
 EOF
@@ -52,10 +51,11 @@ EOF
 				bad << @choose_slots_vars[slot[:code]]
 			end
 		end
-		
+
 		unless bad.empty?
-			v = new_reward_var
-			clause "#{v} #= #{-value} * (#{bad.join(' + ')})"
+			clause "#{new_reward_var} #= #{-value} * (#{bad.join(' + ')})"
+		else
+			comment "(No insane hours anywhere.)"
 		end
 	end
 
@@ -76,6 +76,8 @@ EOF
 	end
 
 	def add_subject(code)
+		subject = @agent.get_subject_by_code(code)
+		comment "#{code} #{subject.name}, #{subject.credits} kr"
 		sv = "TAKE_#{code}"
 		@choose_subject_vars[code] = sv
 		clause "#{sv} in 0 \\/ 1"
@@ -153,6 +155,11 @@ EOF
 			}
 		end
 
+		if weird_slots.size == prednasky.size + cviceni.size
+			puts "WARN: #{code} has just weird slots, it won't fly"
+			return
+		end
+
 		(prednasky + cviceni).each do |p|
 			if @forbid_teachers.include?(p[:teacher])
 				comment "Forbidden teacher: #{p[:teacher]}"
@@ -161,6 +168,12 @@ EOF
 		end
 
 		@prolog.puts
+	end
+
+	def add_subjects(subjects)
+		subjects.each do |p|
+			add_subject(p)
+		end
 	end
 
 	def add_disallowed_slot(day, start, e)
@@ -174,6 +187,7 @@ EOF
 	end
 
 	def add_collisions
+		@prolog.puts
 		comment "Collisions of slots"
 
 		SisAgent::DAYS.each do |day|
@@ -193,22 +207,23 @@ EOF
 			end
 		end
 
-#		@all_slots.each do |slot|
-#			next if SisAgent.slot_weird?(slot)
-#			collisions = []
-#			@all_slots.each do |slot2|
-#				next if slot[:code] == slot2[:code]
-#				next if SisAgent.slot_weird?(slot2)
-#				if SisAgent.slot_collision(slot, slot2)
-#					collisions << @choose_slots_vars[slot2[:code]]
-#				end
-#			end
-#
-#			next if collisions.empty?
-#
-#			clause "(#{@choose_slots_vars[slot[:code]]}) #==> (#{collisions.map { |c| "(#\\ #{c})" }.join(" #/\\ ")})"
-#			@prolog.puts
-#		end
+		@all_slots.each do |slot|
+			next if SisAgent.slot_weird?(slot)
+			collisions = []
+			@all_slots.each do |slot2|
+				next if slot[:code] == slot2[:code]
+				next if SisAgent.slot_weird?(slot2)
+				if SisAgent.slot_collision(slot, slot2)
+					collisions << @choose_slots_vars[slot2[:code]]
+				end
+			end
+
+			next if collisions.empty?
+
+			clause "#{@choose_slots_vars[slot[:code]]} #==> (#{collisions.map { |c| "(#\\ #{c})" }.join(" #/\\ ")})"
+		end
+
+		@prolog.puts
 	end
 
 	def require_subjects(subjects)
@@ -224,9 +239,16 @@ EOF
 		var
 	end
 
+	private
+	def get_subject_name(code)
+		@agent.get_subject_by_code(code).name
+	end
+
+	public
 	def want_subjects(subjects, points)
 		return if subjects.empty?
 		comment "#{points} pts per each of those subjects"
+		comment "(#{subjects.map { |s| get_subject_name(s) }.join(', ')})"
 		var = new_reward_var
 		clause "#{var} #= (#{subjects.map { |s| @choose_subject_vars[s] }.join(' + ')}) * #{points}"
 	end
@@ -260,25 +282,15 @@ EOF
 	def want_free_days(points)
 		@want_free_days = true
 		var = new_reward_var
-		comment "Bonuses for free days (#{points} pts each)"
-		SisAgent::DAYS.each_index do |i|
-			day = SisAgent::DAYS[i]
-			comment "% Bonus for free #{day}"
-			clause "FREE_DAY_#{i} in 0 \\/ 1"
-			slots = @all_slots.select { |slot|
-				slot[:start].include? day
-			}
-			code = if slots.empty?
-				"1"
-			else
-				slots.map { |slot| "(#\\ #{@choose_slots_vars[slot[:code]]})" }.join(" #/\\ ")
-			end
-			clause "FREE_DAY_#{i} #<==> (#{code})"
-		end
-
-		comment "Total bonus for free days"
+		comment "Total bonus for free days (#{points} pts each)"
 		clause "FREE_DAYS_TOTAL #= (#{SisAgent::DAYS.each_index.map { |i| "FREE_DAY_#{i}" }.join(' + ')})"
 		clause "#{var} #= FREE_DAYS_TOTAL * #{points}"
+	end
+
+	def require_free_day(i)
+		raise unless SisAgent::DAYS[i]
+		comment "Required free #{SisAgent::DAYS[i]}"
+		clause "FREE_DAY_#{i} #= 1"
 	end
 
 	def require_at_least_subjects(subjects, n)
@@ -301,9 +313,7 @@ EOF
 
 		vars = all_vars.dup
 		vars += %w{OBJECTIVE}
-		if @want_free_days
-			vars += %w{FREE_DAY_0 FREE_DAY_1 FREE_DAY_2 FREE_DAY_3 FREE_DAY_4}
-		end
+		vars += %w{FREE_DAY_0 FREE_DAY_1 FREE_DAY_2 FREE_DAY_3 FREE_DAY_4}
 		vars.map { |var|
 			@prolog.puts "\t\twrite('#{var}\\t'), write(#{var}), write('\\n'),"
 		}
@@ -311,6 +321,23 @@ EOF
 		@prolog.puts "halt."
 
 		@prolog.close
+	end
+
+	def add_derived
+		# Calculate free days
+		SisAgent::DAYS.each.with_index do |day, i|
+			comment "Free #{day}"
+			clause "FREE_DAY_#{i} in 0 \\/ 1"
+			slots = @all_slots.select { |slot|
+				slot[:start].include? day
+			}
+			code = if slots.empty?
+				"1"
+			else
+				slots.map { |slot| "(#\\ #{@choose_slots_vars[slot[:code]]})" }.join(" #/\\ ")
+			end
+			clause "FREE_DAY_#{i} #<==> (#{code})"
+		end
 	end
 
 	def add_scoring
@@ -321,11 +348,7 @@ EOF
 	end
 
 	def hash_reverse(hash)
-		h = {}
-		hash.each do |k, v|
-			h[v] = k
-		end
-		h
+		Hash[hash.map { |k, v| [v, k] }]
 	end
 
 	def execute
@@ -333,7 +356,7 @@ EOF
 		@slots_by_vars = hash_reverse(@choose_slots_vars)
 
 		FileUtils.chmod "+x", @prolog_path
-		output = `#{@prolog_path}`
+		output = `swipl -q -g main #{@prolog_path}`
 
 		take_subjects = []
 		take_slots = []
@@ -342,9 +365,6 @@ EOF
 
 		free_days = []
 
-		require 'pp'
-		pp $?
-		puts "output: #{output}"
 		output.each_line do |l|
 			next if l.strip!.empty?
 			var, value = l.split("\t")
@@ -366,9 +386,7 @@ EOF
 		outside_slots = @all_slots.select { |slot|
 			(!SisAgent.slot_weird?(slot)) &&
 			(!take_subjects.include?(SisAgent.slot_code_to_subject_code(slot[:code]))) &&
-			(take_slots.none? { |b|
-				SisAgent.slot_collision(slot, b)
-			})
+			(take_slots.none? { |b| SisAgent.slot_collision(slot, b) })
 		}
 		{
 			subjects: take_subjects, slots: take_slots,
@@ -382,5 +400,13 @@ EOF
 		@prolog.puts
 		comment "Either constrain"
 		clause "#{list.map { |l| "(" + (l.map { |v| @choose_subject_vars[v] or raise }.join(" #/\\ ")) + ")" }.join(" #\\/ ")}"
+	end
+
+	# Shortcut
+	def finish_and_execute
+		add_derived
+		add_scoring
+		prolog_close
+		execute
 	end
 end

@@ -10,6 +10,7 @@ body {
 	background-color: #ddd;
 	border: 1px solid black;
 	font-size: 10px;
+	overflow: hidden;
 }
 .slot-container {
 	position: relative;

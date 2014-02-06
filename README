@@ -24,3 +24,38 @@ Umi to ale (v dobe posledniho updatu tohohle souboru) tohle:
 
 **Licence**
 GPL 3.0
+
+**TODO**
+Generator rozvrhu: optimalizuj na kompaktnost rozvrhu.
+
+**Ficury generatoru rozvrhu**
+Doporucuju tohle necist, protoze to je jenom seznam prikazu na ktere bych jinak zapomnel.
+
+OR-AND:
+	gen.either(
+		[
+			%w{NDMI012}, # Nebo tyhle 2:
+			%w{NPFL012 NPFL063}
+		]
+	)
+
+Potrebuju aspon 1 z tehle:
+	gen.require_at_least_subjects(JAZYKY, 1)
+
+Zakazani ucitele
+	gen.forbid_teachers = [ 'Strasny Ucitel' ]
+
+Z povinne volitelnych jsou mi kredity nad 25 na nic, ale predtim jim dam skore 2.
+	gen.want_subjects_by_credits_up_to(POVINNE_VOLITELNE, 25, 2)
+
+Dej za predmety X bodu navic:
+	gen.want_subjects(POVINNE_VOLITELNE_MGR, 2)
+
+Dej za predmety X bodu navic za kazdy kredit:
+	gen.want_subjects_by_credits(%w{NSWI036}, -2)
+
+Povinne:
+	gen.require_subjects(%w{NAIL004 NAIL069})
+
+Povinny volny den:
+	gen.require_free_day(1) # utery

@@ -101,7 +101,7 @@ class SisAgent
 		# TODO: cache it
 		form = subject_search_form
 		form.kod = code
-		link = form.click_button.link_with(text: code)
+		link = form.click_button.link_with(text: code.to_s)
 		raise "nemuzu otevrit predmet #{code}" unless link
 		page = link.click
 		raise unless page.title =~ /Předměty/
@@ -128,7 +128,7 @@ class SisAgent
 				raise WrongFormat, "Unknown format: #{data["Body:"]}"
 			end.to_i
 
-		credits = 
+		credits =
 			if data["E-Kredity:"] =~ /#{data["Semestr:"]} s.:(\d+)$/
 				$1
 			elsif data["E-Kredity:"] =~ /^ *(\d+)$/
@@ -137,22 +137,27 @@ class SisAgent
 				raise WrongFormat, "Unknown format: #{data["E-Kredity:"]}"
 			end.to_i
 
-		data = {
-			code: code,
-			name: name,
-			semester: self.class.parse_semester_name(data["Semestr:"]),
-			points: points,
-			credits: credits
-		}
+		begin
+			data = {
+				code: code,
+				name: name,
+				semester: self.class.parse_semester_name(data["Semestr:"]),
+				points: points,
+				credits: credits
+			}
 
-		File.open(file, "w") do |f| YAML.dump(data, f) end
-		Subject.new(data)
+			File.open(file, "w") do |f| YAML.dump(data, f) end
+			Subject.new(data)
+		rescue WrongFormat => e
+			raise "Wrong format of #{data.inspect}: #{e}"
+		end
 	end
 
 	def self.parse_semester_name(name)
 		case name
 		when "letní" then :summer
 		when "zimní" then :winter
+		when "oba" then :both
 		else raise WrongFormat, "unknown semestr #{name}"
 		end
 	end
@@ -193,8 +198,9 @@ class SisAgent
 	def subject_timetable_page(code)
 		form = subject_timetable_search_page.form_with(name: 'filtr') or raise "Subject search form not found"
 		form.kod = code
-		
-		link = form.click_button.link_with(text: code)
+
+		next_page = form.click_button
+		link = next_page.link_with(text: code.to_s)
 		raise "nemuzu otevrit predmet #{code}" unless link
 		page = link.click
 
@@ -214,7 +220,10 @@ class SisAgent
 		table = page.search('table.tab1').last
 
 		rows = table.search('tr')
-		raise unless rows.count > 0 && rows.shift.search('td').map(&:content).join(';') =~ /Název předmětu;Učitelé;Čas;Učebna;Délka;Přihlášeno studentů;Studenti/
+		raise unless rows.count > 0
+
+		row_header = rows.shift.search('td').map(&:content).join(';')
+		raise unless row_header =~ /Název předmětu;Učitelé;Čas;Učebna;Délka;Přihlášeno studentů \(kapacita\);Studenti/
 
 		result = rows.map do |row|
 			conts = row.search('td').map(&:content).map(&:strip)
@@ -278,7 +287,7 @@ class SisAgent
 		# rok: 12/13
 		#
 		# 13aNMAG333p1
-		unless code =~ /\A(\d{2})a(.{4}\d{3})[xp](\d+)[abcdef]*&*\Z/
+		unless code =~ /\A(\d{2})[ab](.{4}\d{3})[xp](\d+)[abcdef]*&*\Z/
 			pp code
 			raise
 		end
@@ -286,7 +295,7 @@ class SisAgent
 	end
 
 	def self.slot_code_to_type(code)
-		raise unless code =~ /\A(\d{2})a(.{4}\d{3})([xp])(\d+)[abcdef]*&*\Z/
+		raise unless code =~ /\A(\d{2})[ab](.{4}\d{3})([xp])(\d+)[abcdef]*&*\Z/
 		{
 			x: :cviceni, p: :prednaska
 		}[$3.to_sym]
