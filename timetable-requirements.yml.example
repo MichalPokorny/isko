@@ -1,0 +1,102 @@
+---
+# Pevne pozadavky na rozvrh.
+requirements:
+        subjects:
+                # Databazove systemy
+                - NDBI025
+                # Optimalizacni metody
+                - NOPT048
+
+        # TODO: requirement na konkretni volny den
+
+        # Skupiny predmetu s pozadavkem na pocet kreditu
+        at_least_x_credits:
+                -
+                        # Priklad: povinne volitelne predmety.
+                        # Rozvrh musi obsahovat 8 kreditu.
+                        # Nektere predmety chci vic, nektere min.
+                        # Za zapsany predmet se prideli rozvrhu
+                        # tolik bodu, kolik je za dvojteckou.
+                        credits: 8
+
+                        subjects:
+                                NOPT046: -2 # Zaklady spojite optimalizace
+                                NMAI042: -1 # Numericka matematika
+                                NAIL063: 0  # Temno
+                                NPRG051: 1  # Pokrocile C++
+                                NPRG038: 1  # Pokrocily .NET
+                                NSWI143: 0  # Architektura pocitacu
+                                NPGR004: -2 # Pocitacova grafika 2
+                                NPRG036: 0  # Technologie XML
+                                NSWI045: -1 # Rodina protokolu TCP/IP
+                                # nechci
+                                # NPRG003: -2 # metodika programovani a filosofie programovacich jazyku
+
+                -
+                        # Rozvrh musi obsahovat aspon 24 kreditu
+                        # ze vsech predmetu dohromady.
+                        credits: 24
+
+
+# Odmeny za ruzne dalsi vlastnosti rozvrhu
+rewards:
+        # Odmena za kazdy volny den v bodech
+        free_days: 1000
+
+        # Trest za kazdy slot, ktery je necim obsazen
+        used_slots: -5
+
+        # TODO: subjects_by_credits
+
+        # Odmeny nebo tresty za predmety.
+        # Pokud se tady predmety uvedene v jine sekci
+        # (jako napriklad requirements.at_least_x_credits)
+        # opakuji, odmena se pripocte dvakrat!
+        subjects:
+                # Ciste volitelne...
+                # -----------------------------------------
+                NPRG024: 0 # navrhove vzory - Zavoral
+
+                # katedra algebry
+                NALG042: 0 # cviceni z algebry
+                NMAG536: 0 # dukazova slozitost a P vs. NP problem
+                NMMB204: 0 # pocitacova algebra
+
+                # KDSS
+                NSWI133: 0 # firemni seminare
+
+                # KPMS
+                NMFM260: 0 # ekonomie
+                NMFM104: 0 # uvod do financi
+
+                # KSI
+                NSWI109: 1 # konstrukce prekladacu
+                NPRG042: 1 # programovani v paralelnim prostredi
+
+                # KTIML
+                NAIL106: 0 # multiagentni systemy
+
+                # Povinne volitelne na Mgr z KAM a KTIML
+                # -----------------------------------------
+                NTIN017: 0 # paralelni algoritmy
+
+                # Povinne volitelne na Mgr z KTIML
+                # -----------------------------------------
+                NAIL013: 0 # aplikace teorie neuronovych siti
+                NAIL029: 3 # strojove uceni, 3 kr
+                NAIL065: 0 # evolucni robotika
+                NAIL068: 0 # umele bytosti
+                NAIL070: 10 # umela inteligence 2
+                NDBI023: 0 # dobyvani znalosti -- zrejme to ma mraz a mrazova
+                NSWE001: 0 # vestavene systemy a systemy realneho casu
+
+        # Tresty za sloty, ktere se nachazeji v "hnusnych hodinach"
+        slot_periods:
+                -
+                        # -1 bod za kazdy slot, co je mimo 9:00 - 17:00
+                        negated: true
+                        points: -1
+                        period_start: "9:00"
+                        period_end: "17:00"
+
+

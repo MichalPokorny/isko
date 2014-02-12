@@ -19,9 +19,12 @@ module Isko
 			@prolog_writer = PrologWriter.new(prolog_path)
 		end
 
-		delegate :clause, to: :prolog_writer
-		delegate :comment, to: :prolog_writer
-		delegate :empty_line, to: :prolog_writer
+		extend Forwardable
+		protected
+		attr_reader :prolog_writer
+		delegate clause: :prolog_writer
+		delegate comment: :prolog_writer
+		delegate empty_line: :prolog_writer
 
 		public
 		def all_vars
@@ -39,8 +42,8 @@ module Isko
 			end
 		end
 
-		def dont_want_insane_hours(hours_proc, value)
-			comment "Don't want insane hours (#{value} pts)"
+		def want_period(hours_proc, value)
+			comment "Reward slots in a period (#{value} pts)"
 			bad = []
 			@all_slots.each do |slot|
 				next if slot.weird?
@@ -50,16 +53,16 @@ module Isko
 			end
 
 			unless bad.empty?
-				clause "#{new_reward_var} #= #{-value} * (#{bad.join(' + ')})"
+				clause "#{new_reward_var} #= #{value} * (#{bad.join(' + ')})"
 			else
-				comment "(No insane hours anywhere.)"
+				comment "(No rewarded slots.)"
 			end
 		end
 
-		def want_to_do_nothing(value)
+		def want_used_slots(value)
 			v = new_reward_var
-			comment "Don't want to work (#{value} pts)"
-			clause "#{v} #= - #{value} * (#{@choose_slots_vars.values.join(' + ')})"
+			comment "Reward per slot (#{value} pts)"
+			clause "#{v} #= #{value} * (#{@choose_slots_vars.values.join(' + ')})"
 		end
 
 		# TODO: proc to bylo potreba???
@@ -90,10 +93,7 @@ module Isko
 			cviceni = slots.select(&:cviceni?)
 
 			unless (prednasky + cviceni).size == slots.size
-				pp slots
-				pp prednasky
-				pp cviceni
-				raise "jsou i nejake sloty jine nez prednasky a cvika"
+				raise "jsou i nejake sloty jine nez prednasky a cvika (#{slots.inspect})"
 			end
 
 			raise "neunikatni kody slotu: #{slots.inspect}" unless slots.map(&:code).uniq.size == slots.size
@@ -110,7 +110,7 @@ module Isko
 					comment "#{slot.start}, #{slot.duration_minutes} min"
 					clause "#{var} in 0 \\/ 1"
 					clause "(#{var_prednaska} #= #{i + 1}) #<==> #{var}"
-					raise "dvojity slot: #{slot.code}" if choose_slots_vars.key?(slot.code)
+					raise "dvojity slot: #{slot.code}" if @choose_slots_vars.key?(slot.code)
 					@choose_slots_vars[slot.code] = var
 					prednaskove_sloty << var
 				end
@@ -195,7 +195,7 @@ module Isko
 
 					next if slots_in.length < 2
 					comment "Collisions #{Time.absolute_minutes_to_human(times[i - 1])} - #{Time.absolute_minutes_to_human(times[i])}"
-					clause "(#{slots_in.map { |s| choose_slots_var(s) }.join(' + ')}) #=< 1"
+					clause "(#{slots_in.map { |s| choose_slot_var(s) }.join(' + ')}) #=< 1"
 				end
 			end
 
@@ -206,13 +206,13 @@ module Isko
 				@all_slots.each do |slot2|
 					next if slot == slot2 || slot2.weird?
 					if slot.collision?(slot2)
-						collisions << choose_slots_var(slot2)
+						collisions << choose_slot_var(slot2)
 					end
 				end
 
 				next if collisions.empty?
 
-				clause "#{choose_slots_var(slot)} #==> (#{collisions.map { |c| "(#\\ #{c})" }.join(" #/\\ ")})"
+				clause "#{choose_slot_var(slot)} #==> (#{collisions.map { |c| "(#\\ #{c})" }.join(" #/\\ ")})"
 			end
 
 			empty_line
@@ -246,7 +246,7 @@ module Isko
 		end
 
 		def require_credits(credits, subjects)
-			comment "At least #{credits} credits from subjects #{subjects.join(', ')}"
+			comment "At least #{credits} credits from subjects #{subjects.to_a.join(', ')}"
 			clause "(#{subjects.map { |s| "(#{@choose_subject_vars[s]} * #{@agent.get_subject_credits(s)})" }.join(' + ')}) #>= #{credits}"
 		end
 
@@ -308,8 +308,6 @@ module Isko
 			}
 			@prolog_writer.puts "\t\twrite('\\n'),"
 			@prolog_writer.puts "halt."
-
-			@prolog_writer.close
 		end
 
 		def add_derived
@@ -317,11 +315,11 @@ module Isko
 			Days.each.with_index do |day, i|
 				comment "Free #{day}"
 				clause "FREE_DAY_#{i} in 0 \\/ 1"
-				slots = @all_slots.select { |slot| slot.start_day == day }
+				slots = @all_slots.reject(&:weird?).select { |slot| slot.start_day == i }
 				code = if slots.empty?
 					"1"
 				else
-					slots.map { |slot| "(#\\ #{choose_slots_var(slot)})" }.join(" #/\\ ")
+					slots.map { |slot| "(#\\ #{choose_slot_var(slot)})" }.join(" #/\\ ")
 				end
 				clause "FREE_DAY_#{i} #<==> (#{code})"
 			end

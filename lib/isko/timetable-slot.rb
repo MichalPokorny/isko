@@ -7,12 +7,12 @@ module Isko
 
 		def initialize(code: nil, teacher: nil, start: nil, place: nil, duration_minutes: nil, enrolled_students: nil, students_code: nil)
 			@code, @teacher, @start, @place, @duration_minutes, @enrolled_students, @students_code =
-				code, teacher, start, place, duration_minutes, enrolled_students, students_code
+				code, teacher, start, place, duration_minutes.to_i, enrolled_students, students_code
 		end
 
-		def self.parse_slot_code(slot_code)
-			unless match = /\A(\d{2})([ab])(.{4}\d{3})([xp])((\d+)[abcdef]*&*)\Z/.match(slot_code)
-				raise "Unknown slot code format: #{slot_code}"
+		def self.parse_slot_code(code)
+			unless match = /\A(\d{2})([ab])(.{4}\d{3})([xp])((\d+)[abcdef]*&*)\Z/.match(code)
+				raise "Unknown slot code format: #{code}"
 			end
 
 			{
@@ -20,12 +20,12 @@ module Isko
 			}
 		end
 
-		def self.slot_code_to_subject_code(slot_code)
-			parse_slot_code(slot_code)[:subject_code]
+		def self.slot_code_to_subject_code(code)
+			parse_slot_code(code)[:subject_code]
 		end
 
 		def self.slot_code_to_type(code)
-			type = parse_slot_code(slot_code)[:slot_type_code]
+			type = parse_slot_code(code)[:slot_type_code]
 			{ x: :cviceni, p: :prednaska }[type] or raise "Unknown slot type code: #{type}"
 		end
 
@@ -50,15 +50,19 @@ module Isko
 		end
 
 		def time_collision?(other_slot)
-			! ((absolute_end_in_minutes <= b.absolute_start_in_minutes) || (b.absolute_end_in_minutes <= absolute_start_in_minutes))
+			! ((absolute_end_in_minutes <= other_slot.absolute_start_in_minutes) || (other_slot.absolute_end_in_minutes <= absolute_start_in_minutes))
 		end
 
 		def collision?(other_slot)
-			a.start_day == b.start_day && time_collision?(other_slot)
+			start_day == other_slot.start_day && time_collision?(other_slot)
 		end
 
 		def subject_code
 			self.class.slot_code_to_subject_code(code)
+		end
+
+		def type
+			self.class.slot_code_to_type(code)
 		end
 
 		def prednaska?

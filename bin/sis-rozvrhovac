@@ -6,145 +6,133 @@ require 'isko/prolog-gen'
 require 'isko/timetable-reporter'
 require 'haml'
 
+include Isko
+
 require 'fileutils'
 FileUtils.mkdir_p('outputs')
 
-# TODO: chci umelou inteligenci 2
-# TODO: napsat si ten pseudopredmet na prirodovedecke fakulte :)
+file = ARGV[0] || 'timetable-requirements.yml'
+unless File.exist?(file)
+	puts "Cannot load timetable requirements from #{file}."
+	exit 1
+end
 
-VOLITELNE = { # Zajimave predmety
-	NPRG024: 0, # navrhove vzory - Zavoral
+specs = YAML.load_file(file)
+require 'set'
+@all_subject_codes = Set.new
 
-	# katedra algebry
-	NALG042: 0, # cviceni z algebry
-	NMAG536: 0, # dukazova slozitost a P vs. NP problem
-	NMMB204: 0, # pocitacova algebra
+@agent = Agent.new
+@gen = PrologGen.new("./code.prolog", @agent)
 
-	# KDSS
-	NSWI133: 0, # firemni seminare
+# First load all mentioned subjects.
+if specs["requirements"]
+	requirements = specs["requirements"]
 
-	# KPMS
-	NMFM260: 0, # ekonomie
-	NMFM104: 0, # uvod do financi
+	@all_subject_codes += requirements["subjects"] if requirements["subjects"]
 
-	# KSI
-	NSWI109: 1, # konstrukce prekladacu
-	NPRG042: 1, # programovani v paralelnim prostredi
-
-	# KTIML
-	NAIL106: 0, # multiagentni systemy
-}
-POVINNE_VOLITELNE_MGR = { # Predmety, co jsou volitelne na magistru
-	# KAM & KTIML
-	NTIN017: 0, # paralelni algoritmy
-
-	# KTIML
-	NAIL013: 0, # aplikace teorie neuronovych siti
-	NAIL029: 3, # strojove uceni, 3 kr
-	NAIL065: 0, # evolucni robotika
-	NAIL068: 0, # umele bytosti
-	NAIL070: 10, # umela inteligence 2
-	NDBI023: 0, # dobyvani znalosti -- zrejme to ma mraz a mrazova
-	NSWE001: 0, # vestavene systemy a systemy realneho casu
-}
-POVINNE_VOLITELNE = {
-	NOPT046: -2, # zaklady spojite optimalizace
-	NMAI042: -1, # numericka matematika
-	NAIL063: 0, # temno
-	NPRG051: 1, # pokrocile C++
-	NPRG038: 1, # pokrocily .NET
-	NSWI143: 0, # architektura pocitacu
-	NPGR004: -2, # pocitacova grafika 2
-	NPRG036: 0, # technologie XML
-	NSWI045: -1, # rodina protokolu TCP/IP
-
-# nechci
-#	NPRG003: -2 # metodika programovani a filosofie programovacich jazyku
-}
-POVINNE = {
-	NDBI025: 0,	# databazove systemy
-	NOPT048: 0,	# optimalizacni metody
-}
-
-VSECHNY = VOLITELNE.merge(POVINNE_VOLITELNE_MGR.merge(POVINNE_VOLITELNE.merge(POVINNE)))
-
-@agent = Isko::Agent.new
-
-def make_generator(prolog_path = nil)
-	prolog_path ||= './code.prolog'
-	gen = PrologGen.new(prolog_path, @agent)
-	gen.add_subjects(VSECHNY.keys)
-	VSECHNY.each do |s, val|
-		gen.want_subjects([s], val) unless val == 0
+	if requirements["at_least_x_credits"]
+		requirements["at_least_x_credits"].each do |req|
+			case req["subjects"]
+			when Hash
+				@all_subject_codes += req["subjects"].keys
+			when Array
+				@all_subject_codes += req["subjects"]
+			end
+		end
 	end
-
-	gen.require_subjects(POVINNE.keys) # Musim mit povinne predmety.
-	gen
 end
 
-def build_min_hours
-	gen = make_sane_generator
-	gen.want_to_do_nothing(3)
-	gen.want_free_days(30)
+if specs["rewards"]
+	rewards = specs["rewards"]
+	@all_subject_codes += rewards["subjects"].keys if rewards["subjects"]
+end
 
-	puts "Solving (min-hours)."
-	result = gen.finish_and_execute
+@gen.add_subjects(@all_subject_codes)
 
-	if result[:slots].empty?
-		puts "Probably failed :("
-		return nil
+def require_subjects(subjects)
+	@gen.require_subjects(subjects) if subjects
+end
+
+def require_at_least_x_credits(array)
+	array.each do |requirement|
+		credits = requirement["credits"] or raise "Expecting credit requirement"
+		subjects = requirement["subjects"] or @all_subject_codes
+
+		keys = case subjects
+					 when Array
+						 subjects
+					 when Hash
+						 subjects.keys
+					 when nil
+						 @all_subject_codes
+					 else raise "Unexpected type of subjects field (#{subjects.class})" end
+
+		@gen.require_credits(credits, keys)
+
+		if subjects.is_a? Hash
+			subjects.each do |key, reward|
+				@gen.want_subjects([key], reward) unless reward == 0
+			end
+		end
 	end
-
-	result
 end
 
-def build_max_credits
-	gen = make_sane_generator
-	gen.want_subjects_by_credits(VSECHNY.keys)
+if specs["requirements"]
+	requirements = specs["requirements"]
 
-	puts "Solving (max-credit)."
-	result = gen.finish_and_execute
+	require_subjects(requirements["subjects"])
+	require_at_least_x_credits(requirements["at_least_x_credits"])
+end
 
-	if result[:slots].empty?
-		puts "Probably failed :("
-		return nil
+def reward_free_days(reward)
+	@gen.want_free_days(reward) if reward
+end
+
+def reward_used_slots(reward)
+	@gen.want_used_slots(reward) if reward
+end
+
+def reward_subjects(hash)
+	return unless hash
+	raise "Rewarded subjects should be a hash" unless hash.is_a? Hash
+	hash.each do |key, reward|
+		@gen.want_subjects([key], reward) unless reward == 0
 	end
-
-	result
 end
 
-def make_sane_generator
-	gen = make_generator
-	gen.require_credits(8, POVINNE_VOLITELNE.keys) # zbyva mi 8 povinne volitelnych kreditu
-	gen
-end
+def reward_slot_periods(periods)
+	return unless periods
 
-def build_mine
-	# TODO: tempfile
-	puts "building the timetable"
-
-	gen = make_sane_generator
-	gen.want_free_days(1000) # Ohodnot kazdy volny den.
-
-	gen.require_credits(8, POVINNE_VOLITELNE.keys)
-	gen.require_credits(24, VSECHNY.keys)
-
-	gen.want_to_do_nothing(5) # Odeber za kazdy slot.
-
-	# Odeber dalsi body za sloty v tehle casech.
-	gen.dont_want_insane_hours(-> hour { hour < 9 * 60 || hour > 17 * 60 }, 1)
-
-	puts "Solving."
-	result = gen.finish_and_execute
-
-	if result[:slots].empty?
-		puts "Probably failed :("
-		return nil
+	periods.each do |period|
+		pstart, pend = Isko::Time.human_time_to_absolute_minutes(period["period_start"]),
+			Isko::Time.human_time_to_absolute_minutes(period["period_end"])
+		@gen.want_period(-> minute {
+			if period["negated"]
+				minute < pstart || minute > pend
+			else
+				minute >= pstart && minute <= pend
+			end
+		}, period["points"])
 	end
-
-	result
 end
 
-#report_results(build_max_credits, "outputs/output_max_credits.html")
-Isko::TimetableReporter.report_results(@agent, build_mine, "outputs/output.html")
-#report_results(build_min_hours, "outputs/output_min_hours.html")
+if specs["rewards"]
+	rewards = specs["rewards"]
+
+	reward_free_days(rewards["free_days"])
+	reward_used_slots(rewards["used_slots"])
+	reward_subjects(rewards["subjects"])
+	reward_slot_periods(rewards["slot_periods"])
+end
+
+puts "Solving."
+result = @gen.finish_and_execute
+
+if result[:slots].empty?
+	puts "Probably failed :("
+	return nil
+end
+
+TimetableReporter.report_results(@agent, result, "outputs/output.html")
+
+# TODO: gen.want_subjects_by_credits(VSECHNY.keys)

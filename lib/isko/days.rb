@@ -3,7 +3,7 @@ module Isko
 		DAYS = %w{Po Út St Čt Pá}.freeze
 
 		def self.find(name)
-			raise "Unknown day: #{name}" unless DAYS.include(name)
+			raise "Unknown day: #{name}" unless DAYS.include?(name)
 			DAYS.index(name)
 		end
 

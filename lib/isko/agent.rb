@@ -174,7 +174,7 @@ module Isko
 		def get_subject_timetable_slots(code)
 			cache_key = "timetable_slots/#{code}.yml"
 
-			return cache.load_yaml(cache_key) if cache.contains?(cache_key)
+			return cache.load_yaml(cache_key).map { |hash| TimetableSlot.new(hash) } if cache.contains?(cache_key)
 
 			page = subject_timetable_page(code)
 			table = page.search('table.tab1').last
@@ -189,13 +189,13 @@ module Isko
 				conts = row.search('td').map(&:content).map(&:strip)
 				data = {
 					code: conts[7], teacher: conts[9], start: conts[10],
-					place: conts[11], time_minutes: conts[12].to_i,
-					students_enrolled: conts[13].to_i, students_code: conts[14]
+					place: conts[11], duration_minutes: conts[12].to_i,
+					enrolled_students: conts[13].to_i, students_code: conts[14]
 				}
 			end
 
 			cache.save_yaml(cache_key, result)
-			result
+			result.map { |hash| TimetableSlot.new(hash) }
 		end
 
 		def slot_timetable_page(code)

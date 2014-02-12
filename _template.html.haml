@@ -1,65 +1,63 @@
-- outside = outside_slots || []
 !!!
 %html
-  %head
-    %link{rel: :stylesheet, href: "css/bootstrap.min.css"}
-    %link{rel: :stylesheet, href: "css/style.css"}
-    %script{src: "js/jquery-1.9.1.js"}
-    %script{src: "js/jquery-ui.js"}
-    :javascript
-      $(document).ready(function() {
-        $(".faded .slot").draggable({
-          stack: ".faded .slot"
-        });
-      });
-  %body
-    /
-      %div
-        %span.slot-cviceni Cviko
-        %span.slot-prednaska Prednaska
-    %div
-      %h3= "Předměty v rozvrhu - &lambda; = #{objective}"
-      %ul
-        - subjects.each do |subject|
-          %li
-            %b= subject[:name]
-            %i= "(#{subject[:code]}, #{subject[:credits]} kr.)"
-            %ul
-              - subject[:slots].map do |slot|
-                %li den=#{slot[:day]} start=#{slot[:start]} length=#{slot[:length]} #{slot[:type]} #{slot[:teacher]}
+	%head
+		%link{rel: :stylesheet, href: "css/bootstrap.min.css"}
+		%link{rel: :stylesheet, href: "css/bootstrap-theme.min.css"}
+		%link{rel: :stylesheet, href: "css/style.css"}
+		%script{src: "js/jquery-1.9.1.js"}
+		%script{src: "js/jquery-ui.js"}
+		%script{src: "js/bootstrap.min.js"}
+		:javascript
+			$(document).ready(function() {
+				$(".faded .slot").draggable({
+					stack: ".faded .slot"
+				});
+			});
+	%body
+		/
+			%div
+				%span.slot-cviceni Cviko
+				%span.slot-prednaska Prednaska
+		.container-fluid
+			.row
+				.col-xs-4.small
+					%h3= "Předměty v rozvrhu - &lambda; = #{objective}"
+					%i= "&Sigma; kreditů: #{subjects.map { |s| s[:credits] }.inject(&:+)}"
+					%ul
+						- subjects.each do |subject|
+							%li
+								%b= subject[:name]
+								%i= "(#{subject[:code]}, #{subject[:credits]} kr.)"
+								%ul
+									- subject[:slots].map do |slot|
+										%li den=#{slot[:day]} start=#{slot[:start]} length=#{slot[:length]} #{slot[:type]} #{slot[:teacher]}
 
-      %hr
-      %b= "&Sigma; = #{subjects.map { |s| s[:credits] }.inject(&:+)}"
+				.col-xs-8
+					-# %pre= raw_output
 
-    -# %pre= raw_output
+					- dh = 100 # vyska 1 dne
+					- min_hour = 7
+					- max_hour = 19
+					- min_time = (min_hour * 60) # 6 hodin
+					- max_time = ((max_hour + 1) * 60)
+					- wm = 100.0 / (max_time - min_time) # sirka 1 minuty, v procentech
+					.slot-container
+						- (min_hour..max_hour).each do |i|
+							%div{style: "border-left: 1px solid black; padding-left: 3px; position: absolute; left: #{(i * 60 - min_time) * wm}%;"}= "#{i}:00"
+						%div{style: "z-index: 10", class: "faded"}
+							- outside_slots.each do |slot|
+								%div{class: "slot slot-#{slot[:type]}", style: "position: absolute; left: #{(slot[:start] - min_time) * wm}%; top: #{slot[:day] * dh + 30}px; width: #{(slot[:length]) * wm}%; height: #{dh - 10}px;"}
+									%div
+										%b= slot[:subject_name]
+										= "(#{slot[:type] == :prednaska ? 'P' : 'Cv'})"
+									%div= slot[:teacher]
+									%div= slot[:subject_code]
 
-    - dh = 100 # vyska 1 dne
-    - wm = 1.4 # sirka 1 minuty
-    - min_time = (7 * 60) # 6 hodin
-    .slot-container
-      - (7..19).each do |i|
-        %div{style: "border-left: 1px solid black; padding-left: 3px; position: absolute; left: #{(i * 60 - min_time) * wm}px;"}= "#{i}:00"
-      %div{style: "z-index: 10", class: "faded"}
-        - outside_slots.each do |slot|
-          %div{class: "slot slot-#{slot[:type]}", style: "position: absolute; left: #{(slot[:start] - min_time) * wm}px; top: #{slot[:day] * dh + 30}px; width: #{(slot[:length]) * wm}px; height: #{dh - 10}px;"}
-            %div
-              %b= slot[:subject_name]
-              = "(#{slot[:type] == :prednaska ? 'P' : 'Cv'})"
-            %div
-              = slot[:teacher]
-            %div
-              = slot[:subject_code]
-
-      %div{style: "z-index: -10"}
-        - shown.each do |slot|
-          %div{class: "slot slot-#{slot[:type]}", style: "position: absolute; left: #{(slot[:start] - min_time) * wm}px; top: #{slot[:day] * dh + 30}px; width: #{(slot[:length]) * wm}px; height: #{dh - 10}px;"}
-            %div
-              %b= slot[:subject_name]
-              = "(#{slot[:type] == :prednaska ? 'P' : 'Cv'})"
-            %div
-              = slot[:teacher]
-            %div
-              = slot[:subject_code]
-
-            -# = slot.inspect
-
+						%div{style: "z-index: -10"}
+							- shown.each do |slot|
+								%div{class: "slot slot-#{slot[:type]}", style: "position: absolute; left: #{(slot[:start] - min_time) * wm}%; top: #{slot[:day] * dh + 30}px; width: #{(slot[:length]) * wm}%; height: #{dh - 10}px;"}
+									%div
+										%b= slot[:subject_name]
+										= "(#{slot[:type] == :prednaska ? 'P' : 'Cv'})"
+									%div= slot[:teacher]
+									%div= slot[:subject_code]

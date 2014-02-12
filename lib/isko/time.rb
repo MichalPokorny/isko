@@ -4,6 +4,14 @@ module Isko
 			"#{minutes / 60}:#{minutes % 60}"
 		end
 
+		def self.human_time_to_absolute_minutes(human_time)
+			unless match = /\A(\d+):(\d+)\Z/.match(human_time)
+				raise "Invalid time format: #{human_time}"
+			end
+
+			absolute_minutes(hour: match[1], minute: match[2])
+		end
+
 		def self.parse_human(human)
 			unless match = /\A(.+) (\d+):(\d+)\Z/.match(human)
 				raise "Invalid time format: #{human}"

@@ -13,6 +13,11 @@ Ocekava to heslo do SISu ulozene v ~/.sis-credentials.yml:
 **Autor**
 Michal 'prvak' Pokorny (pok@rny.cz)
 
+**Instalace**
+
+	gem build isko.gemspec
+	gem install isko-*.gem
+
 **Dokumentace**
 Neni a nejspis ani nikdy nebude.
 
@@ -25,10 +30,17 @@ Umi to ale (v dobe posledniho updatu tohohle souboru) tohle:
 **Licence**
 GPL 3.0
 
+**Generator rozvrhu**
+Je v `bin/sis-rozvrhovac`. Nainstaluj gem a spust tenhle soubor. (Z tohohle adresare. Je to sice fuj, ale zatim
+to staci.) Jako parametr zadej `timetable-requirements.yml.example`. Jestli vsechno dopadne dobre (povede se pristup
+k SISu, atd.), objevi se v `outputs/output.html` uzasne HTMLko s rozvrhem.
+
+Jestli to chces pouzit, zkopiruj si nekam `timetable-requirements.yml.example` a pohraj si s tim.
+
 **TODO**
 Generator rozvrhu: optimalizuj na kompaktnost rozvrhu.
 
-**Ficury generatoru rozvrhu**
+**Nepredelene ficury generatoru rozvrhu**
 Doporucuju tohle necist, protoze to je jenom seznam prikazu na ktere bych jinak zapomnel.
 
 OR-AND:
@@ -48,14 +60,8 @@ Zakazani ucitele
 Z povinne volitelnych jsou mi kredity nad 25 na nic, ale predtim jim dam skore 2.
 	gen.want_subjects_by_credits_up_to(POVINNE_VOLITELNE, 25, 2)
 
-Dej za predmety X bodu navic:
-	gen.want_subjects(POVINNE_VOLITELNE_MGR, 2)
-
 Dej za predmety X bodu navic za kazdy kredit:
 	gen.want_subjects_by_credits(%w{NSWI036}, -2)
-
-Povinne:
-	gen.require_subjects(%w{NAIL004 NAIL069})
 
 Povinny volny den:
 	gen.require_free_day(1) # utery

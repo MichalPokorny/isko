@@ -22,13 +22,15 @@ module Isko
 			@prolog.puts
 		end
 
-		def close
-			@prolog.close
-		end
+		protected
+		attr_reader :prolog
 
-		delegate :puts, to: :prolog
+		public
+		extend Forwardable
+		delegate puts: :prolog
 
 		def execute_for_output
+			@prolog.close
 			FileUtils.chmod "+x", @prolog_path
 			`swipl -q -g main #@prolog_path`
 		end

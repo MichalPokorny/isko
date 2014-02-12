@@ -6,12 +6,9 @@ module Isko
 			@base_path = Pathname.new(base_path).expand_path
 		end
 
-		protected
-		attr_reader :base_path
-
 		public
 		def file_path(subpath)
-			File.join(base_path, subpath)
+			File.join(@base_path, subpath)
 		end
 
 		def contains?(subpath)
@@ -24,7 +21,8 @@ module Isko
 		end
 
 		def touch(subpath = nil)
-			FileUtils.mkdir_p(subpath ? File.basename(file_path(subpath)) : path)
+			touch_path = subpath ? File.dirname(file_path(subpath)) : path
+			FileUtils.mkdir_p(touch_path)
 		end
 
 		def save_yaml(subpath, data)
