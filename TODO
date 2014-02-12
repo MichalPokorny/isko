@@ -1,0 +1,9 @@
+Umoznit v "hezkem formatu" zadavat:
+	- disallowed slot & don't want slot (casove rozmezi)
+	- want subjects by credits
+	- want subjects by credits up to
+	- require free day
+	- require at least X subjects of (programovaci jazyky)
+
+TODO: ignorovani kolizi? "polopredmet pro ucely kolizi"? "poloslot"?
+
