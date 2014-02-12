@@ -5,7 +5,9 @@ require 'isko/agent'
 require 'isko/semester'
 require 'terminal-table'
 
-agent = Isko::Agent.new
+include Isko
+
+agent = Agent.new
 
 if ARGV.empty?
 	puts "usage: predmet.rb (code1) (code2) ..."
