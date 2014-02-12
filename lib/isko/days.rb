@@ -16,12 +16,12 @@ module Isko
 			DAYS[i]
 		end
 
-		def self.each
-			DAYS.each
+		def self.each(&block)
+			DAYS.each(&block)
 		end
 
-		def self.each_index
-			DAYS.each_index
+		def self.each_index(&block)
+			DAYS.each_index(&block)
 		end
 	end
 end

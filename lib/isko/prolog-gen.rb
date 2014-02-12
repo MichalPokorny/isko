@@ -184,17 +184,18 @@ module Isko
 			empty_line
 			comment "Collisions of slots"
 			comment "(By time slots)"
-			Days.each do |day|
+			Days.each.with_index do |day, i|
 				comment "Collisions on #{day}"
-				slots = @all_slots.select { |slot| !slot.weird? && slot.start_day == day }
+				slots = @all_slots.select { |slot| !slot.weird? && slot.start_day == i }
 				times = (slots.map(&:absolute_start_in_minutes) + slots.map(&:absolute_end_in_minutes)).sort.uniq
 
-				times.each_index do |i|
-					next if i == 0
-					slots_in = slots.select { |s| s.pure_time_collision?(times[i - 1], times[i]) }
+				times.each.with_index do |pend, j|
+					next if j == 0
+					pstart = times[j - 1]
+					slots_in = slots.select { |s| s.pure_time_collision?(pstart, pend) }
 
 					next if slots_in.length < 2
-					comment "Collisions #{Time.absolute_minutes_to_human(times[i - 1])} - #{Time.absolute_minutes_to_human(times[i])}"
+					comment "Collisions #{Time.absolute_minutes_to_human(pstart)} - #{Time.absolute_minutes_to_human(pend)}"
 					clause "(#{slots_in.map { |s| choose_slot_var(s) }.join(' + ')}) #=< 1"
 				end
 			end
@@ -202,13 +203,11 @@ module Isko
 			comment "(By explicit listing)"
 			@all_slots.each do |slot|
 				next if slot.weird?
-				collisions = []
-				@all_slots.each do |slot2|
-					next if slot == slot2 || slot2.weird?
-					if slot.collision?(slot2)
-						collisions << choose_slot_var(slot2)
-					end
-				end
+
+				collisions = @all_slots.map { |slot2|
+					next if slot != slot2 || slot2.weird? || !slot.collision(slot2)
+					choose_slot_var(slot2)
+				}.compact
 
 				next if collisions.empty?
 
