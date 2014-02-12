@@ -4,17 +4,15 @@ require 'uri'
 require 'yaml'
 require 'fileutils'
 require 'pathname'
+require 'isko/timetable-slot'
+require 'isko/subject'
+require 'isko/days'
+require 'isko/cache'
+require 'isko/semester'
+require 'isko/exam-result'
 
 module Isko
 	class Agent
-		class Subject
-			def initialize(code: nil, name: nil, semester: nil, points: nil, credits: nil)
-				@code, @name, @semester, @points, @credits = code, name, semester, points, credits
-			end
-
-			attr_reader :code, :name, :semester, :points, :credits
-		end
-
 		class WrongFormat < StandardError; end
 		class InvalidCredentials < StandardError; end
 
@@ -22,12 +20,17 @@ module Isko
 			YAML.load_file(Pathname.new("~/.sis-credentials.yml").expand_path)
 		end
 
-		def initialize(login: nil, password: nil)
+		def initialize(login: nil, password: nil, cache: nil)
 			creds = self.class.default_credentials
 			@login, @password = login || creds["login"], password || creds["password"]
+			@cache = cache || Cache.new
 			@agent = Mechanize.new
 		end
 
+		private
+		attr_reader :cache
+
+		public
 		def main_page
 			return @main_page if defined?(@main_page) && @main_page
 			page = @agent.get('https://is.cuni.cz/studium/index.php')
@@ -43,38 +46,22 @@ module Isko
 			page
 		end
 
-		def vysledky_zkousek
-			predmety = []
+		def exam_results
 			link = main_page.link_with(text: /Výsledky zkoušek/) or raise "No link to exam results"
 			page = link.click
 
 			raise unless page.title =~ /Výsledky zkoušek - prohlížení/
 
-			rows = page.search("tr")
-
-			rows.each do |row|
+			page.search("tr").map do |row|
 				next unless row['class'] =~ /row[12]/
 
 				conts = row.search("td").map(&:content)
-				kod, jmeno, kredity, vysledek = conts[2], conts[3], conts[10].to_i, conts[6]
-
-				vysledek.gsub! "Z", ""
-
 				next unless conts[11] =~ /Splněno/
 
-				predmet = {
-					code: kod, name: jmeno, credits: kredity
-				}
+				kod, vysledek = conts[2], conts[6].gsub("Z", "")
 
-				unless vysledek == "-" || vysledek.empty?
-					vysledek = vysledek.to_i
-					predmet[:result] = vysledek
-				end
-
-				predmety << predmet
-			end
-
-			predmety
+				ExamResult.new(code: kod, result: (vysledek == "-" || vysledek.empty?) ? :credited : vysledek.to_i)
+			end.compact
 		end
 
 		def page_subtitle(page)
@@ -95,9 +82,8 @@ module Isko
 		end
 
 		def get_subject_by_code(code)
-			file = "cache/subjects/#{code}.yml"
-
-			return Subject.new(YAML.load_file(file)) if File.exist?(file)
+			cache_key = "subjects/#{code}.yml"
+			return Subject.new(cache.load_yaml(cache_key)) if cache.contains?(cache_key)
 
 			# TODO: cache it
 			form = subject_search_form
@@ -142,40 +128,15 @@ module Isko
 				data = {
 					code: code,
 					name: name,
-					semester: self.class.parse_semester_name(data["Semestr:"]),
+					semester: Semester.from_human(data["Semestr:"]),
 					points: points,
 					credits: credits
 				}
 
-				File.open(file, "w") do |f| YAML.dump(data, f) end
+				cache.save_yaml(cache_key, data)
 				Subject.new(data)
 			rescue WrongFormat => e
 				raise "Wrong format of #{data.inspect}: #{e}"
-			end
-		end
-
-		def self.parse_semester_name(name)
-			case name
-			when "letní" then :summer
-			when "zimní" then :winter
-			when "oba" then :both
-			else raise WrongFormat, "unknown semestr #{name}"
-			end
-		end
-
-		def self.semester_to_human(semester)
-			case semester
-			when :summer then "letní"
-			when :winter then "zimní"
-			else raise WrongFormat
-			end
-		end
-
-		def self.semester_to_i(semester)
-			case semester
-			when :summer then 1
-			when :winter then 2
-			else raise WrongFormat
 			end
 		end
 
@@ -211,11 +172,9 @@ module Isko
 		end
 
 		def get_subject_timetable_slots(code)
-			FileUtils.mkdir_p('cache/timetable_slots')
-			FileUtils.mkdir_p('cache/subjects')
-			file = "cache/timetable_slots/#{code}.yml"
+			cache_key = "timetable_slots/#{code}.yml"
 
-			return YAML.load_file(file) if File.exist? file
+			return cache.load_yaml(cache_key) if cache.contains?(cache_key)
 
 			page = subject_timetable_page(code)
 			table = page.search('table.tab1').last
@@ -228,84 +187,19 @@ module Isko
 
 			result = rows.map do |row|
 				conts = row.search('td').map(&:content).map(&:strip)
-				{
-					code: conts[7], teacher: conts[9], start: conts[10], place: conts[11], time_minutes: conts[12].to_i, students_enrolled: conts[13].to_i, students_code: conts[14]
+				data = {
+					code: conts[7], teacher: conts[9], start: conts[10],
+					place: conts[11], time_minutes: conts[12].to_i,
+					students_enrolled: conts[13].to_i, students_code: conts[14]
 				}
 			end
 
-			File.open(file, "w") do |f| YAML.dump(result, f) end
+			cache.save_yaml(cache_key, result)
 			result
 		end
 
-		def self.slot_weird?(a)
-			a[:start].empty?
-		end
-
-		def self.slot_start_day(slot)
-			unless slot[:start] =~ /\A(.+) (\d+):(\d+)\Z/
-				p slot
-				raise
-			end
-			raise WrongFormat unless DAYS.include? $1
-			return $1
-		end
-
-		def self.slot_absolute_start(slot)
-			unless slot[:start] =~ /\A(.+) (\d+):(\d+)\Z/
-				p slot
-				raise
-			end
-			raise WrongFormat unless DAYS.include? $1
-			return ($2.to_i * 60) + $3.to_i
-		end
-
-		def self.slot_time_collision?(a, b_start, b_end)
-			a_start = a[:start]
-			a_time = a[:time_minutes]
-
-			a_start = slot_absolute_start(a)
-			a_end = a_start + a_time
-
-			return ! ((a_end <= b_start) || (b_end <= a_start))
-		end
-
-		def self.slot_collision(a, b)
-			a_start, b_start = a[:start], b[:start]
-			a_time, b_time = a[:time_minutes], b[:time_minutes]
-
-			a_day, a_start = slot_start_day(a), slot_absolute_start(a)
-			b_day, b_start = slot_start_day(b), slot_absolute_start(b)
-
-			return false unless a_day == b_day
-			a_end = a_start + a_time
-			b_end = b_start + b_time
-
-			return ! ((a_end <= b_start) || (b_end <= a_start))
-		end
-
-		def self.slot_code_to_subject_code(code)
-			# (rok)a(predmet)[xp](\d+)b*
-			# rok: 12/13
-			#
-			# 13aNMAG333p1
-			unless code =~ /\A(\d{2})[ab](.{4}\d{3})[xp](\d+)[abcdef]*&*\Z/
-				pp code
-				raise
-			end
-			$2
-		end
-
-		def self.slot_code_to_type(code)
-			raise unless code =~ /\A(\d{2})[ab](.{4}\d{3})([xp])(\d+)[abcdef]*&*\Z/
-			{
-				x: :cviceni, p: :prednaska
-			}[$3.to_sym]
-		end
-
-		DAYS = %w{Po Út St Čt Pá}
-
 		def slot_timetable_page(code)
-			page = subject_timetable_page(self.class.slot_code_to_subject_code(code))
+			page = subject_timetable_page(TimetableSlot.slot_code_to_subject_code(code))
 			page.link_with(href: /#{code}/).click
 		end
 

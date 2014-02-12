@@ -1,0 +1,52 @@
+#!/usr/bin/ruby -w
+
+require 'isko'
+require 'isko/agent'
+
+# simulovane znamky: -s (znamka:kredity) (znamka:kredity) ...
+znamky_navic = []
+if ARGV[0] == "-s"
+	ARGV.shift
+
+	while ARGV.length > 0 && ARGV[0].index(":")
+		znamky_navic << ARGV.shift.split(":").map(&:to_i)
+	end
+end
+
+agent = Isko::Agent.new
+results = agent.exam_results
+
+results.each do |vysledek|
+	name = agent.get_subject_name(vysledek.code)
+	credits = agent.get_subject_credits(vysledek.code)
+	v = vysledek.result
+	v = "OK" if v == :credited
+	puts "#{vysledek.code} #{name} (#{credits} kr.): #{v}"
+end
+
+creds = results.map { |x| agent.get_subject_credits(x.code) }.inject(&:+)
+zkouskove = results.select { |x| x.result != :credited }
+creds_zk = zkouskove.map{ |x| agent.get_subject_credits(x.code) }.inject(&:+)
+
+soucet_znamek = zkouskove.map(&:result).inject(&:+).to_f
+soucet_vazenych_znamek = zkouskove.map{|x| x.result * agent.get_subject_credits(x.code) }.inject(&:+).to_f
+
+pocet_predmetu = zkouskove.count
+
+znamky_navic.each { |zn|
+	znamka, kredity = *zn
+
+	puts "        + #{znamka}, #{kredity} kr"
+
+	soucet_znamek += znamka
+	soucet_vazenych_znamek += znamka * kredity
+	creds_zk += kredity
+	creds += kredity
+	pocet_predmetu += 1
+}
+
+avg = soucet_znamek / pocet_predmetu
+cavg = soucet_vazenych_znamek / creds_zk
+
+puts "Nevazeny prumer: %.3f   Kreditove vazeny prumer: %.3f" % [avg, cavg]
+puts "Celkem kreditu se znamkami: %d    Celkem kreditu: %d" % [creds_zk, creds]

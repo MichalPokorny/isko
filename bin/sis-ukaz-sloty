@@ -1,0 +1,19 @@
+#!/usr/bin/ruby -w
+
+require 'isko'
+require 'isko/agent'
+
+if ARGV.empty?
+	puts "Expected argument: slot name (for example '13aNTVY016x02')"
+	exit 1
+else
+	agent = Isko::Agent.new
+
+	ARGV.each do |slot|
+		instances = agent.all_slot_instances(slot)
+
+		passed = instances.count { |inst| Date.today > inst }
+		remaining = instances.size - passed
+		puts(sprintf("#{slot}: passed: #{passed}, remaining: #{remaining} (%.2f%%)", (passed.to_f * 100)/instances.size))
+	end
+end

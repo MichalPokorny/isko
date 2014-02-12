@@ -3,12 +3,12 @@ module Isko
 		def self.report_results(agent, result, file)
 			shown = result[:slots].map { |slot|
 				s = {
-					day: SisAgent::DAYS.index(SisAgent.slot_start_day(slot)),
-					start: SisAgent.slot_absolute_start(slot),
+					day: Agent::DAYS.index(Agent.slot_start_day(slot)),
+					start: Agent.slot_absolute_start(slot),
 					length: slot[:time_minutes],
 					code: slot[:code],
-					subject_code: SisAgent.slot_code_to_subject_code(slot[:code]),
-					type: SisAgent.slot_code_to_type(slot[:code]),
+					subject_code: TimetableSlot.slot_code_to_subject_code(slot[:code]),
+					type: TimetableSlot.slot_code_to_type(slot[:code]),
 					teacher: slot[:teacher],
 				}
 				s[:subject_name] = agent.get_subject_name(s[:subject_code])
@@ -16,15 +16,15 @@ module Isko
 			}
 
 			outside_slots = result[:outside_slots].reject { |slot|
-				SisAgent::slot_weird?(slot)
+				Agent::slot_weird?(slot)
 			}.map { |slot|
 				s = {
-					day: SisAgent::DAYS.index(SisAgent.slot_start_day(slot)),
-					start: SisAgent.slot_absolute_start(slot),
+					day: Agent::DAYS.index(Agent.slot_start_day(slot)),
+					start: Agent.slot_absolute_start(slot),
 					length: slot[:time_minutes],
 					code: slot[:code],
-					subject_code: SisAgent.slot_code_to_subject_code(slot[:code]),
-					type: SisAgent.slot_code_to_type(slot[:code]),
+					subject_code: TimetableSlot.slot_code_to_subject_code(slot[:code]),
+					type: TimetableSlot.slot_code_to_type(slot[:code]),
 					teacher: slot[:teacher],
 				}
 				s[:subject_name] = agent.get_subject_name(s[:subject_code])
