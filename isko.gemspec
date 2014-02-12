@@ -9,8 +9,9 @@ Gem::Specification.new do |s|
 	s.files = Dir["lib/**/*.rb", "lib/*"]
 	s.license = "GPL 3.0"
 
-	s.runtime_dependency 'yaml'
-	s.runtime_dependency 'mechanize'
-	s.runtime_dependency 'terminal-table'
-	s.runtime_dependency 'haml'
+	s.add_runtime_dependency 'mechanize', '~> 2.0'
+	s.add_runtime_dependency 'terminal-table', '~> 1.4'
+	s.add_runtime_dependency 'haml', '~> 4.0'
+
+	s.required_ruby_version = '>= 1.9'
 end
