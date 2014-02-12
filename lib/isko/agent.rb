@@ -27,7 +27,7 @@ module Isko
 			@agent = Mechanize.new
 		end
 
-		private
+		protected
 		attr_reader :cache
 
 		public

@@ -6,7 +6,7 @@ module Isko
 			@base_path = Pathname.new(base_path).expand_path
 		end
 
-		private
+		protected
 		attr_reader :base_path
 
 		public
@@ -24,7 +24,7 @@ module Isko
 		end
 
 		def touch(subpath = nil)
-			FileUtils.mkdir_p(subpath ? file_path(subpath) : path)
+			FileUtils.mkdir_p(subpath ? File.basename(file_path(subpath)) : path)
 		end
 
 		def save_yaml(subpath, data)
