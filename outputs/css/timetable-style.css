@@ -1,0 +1,103 @@
+body {
+	height: 100%;
+}
+.slot-contents-container {
+	width: 100%;
+	height: 100%;
+	position: relative;
+}
+.time-label > .inside {
+	position: relative;
+	left: 0; top: 0;
+}
+.rozvrh {
+	width: 700px;
+	height: 500px;
+	font-family: sans-serif;
+}
+.rozvrh.small {
+	width: 700px;
+	height: 430px;
+	font-size: 10px;
+}
+.rozvrh.small {
+	/*font-family: 'Bitstream Vera Sans Mono', 'Andale Mono', monospace;*/
+	font-family: 'Andale Mono';
+}
+.slot-block {
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+}
+.slot-container-outside {
+	width: 100%;
+	height: 100%;
+}
+.slot-container {
+	width: 100%;
+	height: 100%;
+	position: relative;
+}
+.slot-cviceni {
+	background: url("../img/ddddff.png") #ddddff;
+	border-color: #ccf;
+}
+.slot-prednaska {
+	background: url("../img/ffe0b7.png") #ffe0b7;
+	border-color: #f6debf;
+}
+.place {
+	font-weight: bold;
+	position: absolute;
+	right: 0%;
+	bottom: 0%;
+}
+.type {
+	position: absolute;
+	left: 0%;
+	bottom: 0%;
+}
+.name {
+	display: block;
+	text-align: left;
+}
+.teacher {
+	display: none;
+}
+
+/*** Printing specifics ***/
+/* @media print { */
+	.rozvrh.small {
+		width: 7cm;
+		height: 3cm;
+		font-size: 0.1cm;
+	}
+/* } */
+
+/*** Relative sizes ***/
+.rozvrh.small .name {
+	line-height: 1.2em;
+}
+.time-label {
+	border-left: 0.3em dashed #ddd;
+	position: absolute;
+	/* text-decoration: underline; */
+}
+.time-label > .inside > span {
+	padding-left: 1em;
+	position: relative;
+	top: 50%;
+	padding-top: -0.5em;
+	/*line-height: 100%;
+	vertical-align: middle;*/
+}
+.rozvrh.small .place {
+	font-size: 180%;
+	line-height: 1.2em;
+}
+.slot {
+	background-color: #ddd;
+	border: 0.1em solid #999;
+	overflow: hidden;
+	padding: 0.3em;
+}

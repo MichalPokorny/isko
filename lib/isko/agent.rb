@@ -1,4 +1,5 @@
 require 'mechanize'
+require 'csv'
 require 'pp'
 require 'uri'
 require 'yaml'
@@ -148,11 +149,58 @@ module Isko
 			get_subject_by_code(code).credits
 		end
 
-		def subject_timetable_search_page
-			return @subject_timetable_search_page if defined?(@subject_timetable_search_page) && @subject_timetable_search_page
+		def timetable_ng_page
+			return @timetable_ng_page if defined?(@timetable_ng_page) && @timetable_ng_page
 			page = main_page.link_with(text: /Rozvrh NG/).click
 			raise unless page.title =~ /Rozvrh NG/
-			page = page.link_with(href: /roz_predmet_find/).click
+			@timetable_ng_page = page
+		end
+
+		private
+		def parse_timetable_csv(page)
+			data = page.body.force_encoding("Windows-1250").encode("UTF-8")
+			CSV.parse(data, col_sep: ?;)
+		end
+
+		public
+		def my_timetable_csv
+			page = timetable_ng_page.link_with(href: /roz_muj_macro/).click
+			parse_timetable_csv(page.link_with(href: /&csv=1$/).click)
+		end
+
+		def chosen_timetable_csv
+			page = timetable_ng_page
+			form = page.form_with(name: "filtr")
+			form['rezim'] = "kosik"
+			page = form.click_button
+
+			raise unless page.search("#tip").map(&:content).join =~ /pro definici a zobrazen/ # i vlasniho rozvrhu
+
+			parse_timetabe_csv(page.link_with(href: /&csv=1$/).click)
+		end
+
+		private
+		def check_csv_format!(csv)
+			raise "Neznamy format" unless csv.shift == ["id listku(veskera vyuka pro celou paralelku - vice hodin za tyden)",
+				"id podlistku(konkretni vyuka v nejaky den a hodinu)",
+				"kod predmetu", "nazev", "den(1=po)", "cas(min od 0:00)", "mistnost",
+				"delka(min)", "prvni tyden vyuky", "prvni den vyuky pro jednorazovou",
+				"pocet tydnu vyuky", "ctrnactideni vyuka", "ucitele"]
+			csv
+		end
+
+		public
+		def my_timetable_slot_codes
+			check_csv_format!(my_timetable_csv).map(&:first)
+		end
+
+		def chosen_timetable_slot_codes
+			check_csv_format!(chosen_timetable_csv).map(&:first)
+		end
+
+		def subject_timetable_search_page
+			return @subject_timetable_search_page if defined?(@subject_timetable_search_page) && @subject_timetable_search_page
+			page = timetable_ng_page.link_with(href: /roz_predmet_find/).click
 			raise "On wrong page: #{page.uri}, expecting subject search" unless page.uri.to_s =~ /roz_predmet_find\.php/
 			@subject_timetable_search_page = page
 		end
@@ -187,7 +235,7 @@ module Isko
 
 			result = rows.map do |row|
 				conts = row.search('td').map(&:content).map(&:strip)
-				data = {
+				{
 					code: conts[7], teacher: conts[9], start: conts[10],
 					place: conts[11], duration_minutes: conts[12].to_i,
 					enrolled_students: conts[13].to_i, students_code: conts[14]
@@ -196,6 +244,11 @@ module Isko
 
 			cache.save_yaml(cache_key, result)
 			result.map { |hash| TimetableSlot.new(hash) }
+		end
+
+		def get_timetable_slot(code)
+			subject = TimetableSlot.slot_code_to_subject_code(code)
+			get_subject_timetable_slots(subject).select { |slot| slot.code == code }.first
 		end
 
 		def slot_timetable_page(code)

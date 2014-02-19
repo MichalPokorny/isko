@@ -1,0 +1,11 @@
+#!/usr/bin/ruby -w
+
+require 'isko'
+require 'isko/agent'
+require 'isko/timetable-writer'
+
+agent = Isko::Agent.new
+
+slots = agent.chosen_timetable_slot_codes.map { |code| agent.get_timetable_slot(code) }
+
+Isko::TimetableWriter.report_results(agent, slots, "outputs/timetable.html")

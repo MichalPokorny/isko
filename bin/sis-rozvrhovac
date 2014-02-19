@@ -4,7 +4,6 @@ require 'isko'
 require 'isko/agent'
 require 'isko/prolog-gen'
 require 'isko/timetable-reporter'
-require 'haml'
 
 include Isko
 

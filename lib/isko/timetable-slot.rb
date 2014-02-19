@@ -72,5 +72,15 @@ module Isko
 		def cviceni?
 			self.class.parse_slot_code(code)[:slot_type_code] == :x
 		end
+
+		def teacher_surnames
+			self.class.teacher_surnames(teacher)
+		end
+
+		def self.teacher_surnames(teachers)
+			teachers.split(",").map { |teacher| teacher.split.first }.reject { |name|
+				%w{prof. Mgr. RNDr. Ph.D. DrSc. CSc.}.include? name
+			}.join(", ")
+		end
 	end
 end

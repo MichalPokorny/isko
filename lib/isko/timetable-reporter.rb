@@ -1,4 +1,5 @@
 require 'isko/days'
+require 'haml'
 
 module Isko
 	module TimetableReporter
