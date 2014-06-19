@@ -7,43 +7,47 @@
 		%link{rel: :stylesheet, href: "css/timetable-style.css"}
 	%body
 		- rozvrh = capture_haml do
-			.rozvrh.small{style: "float: left; margin: 5px" }
-				- labels_height = 10 # procent
-				- labels_margin = 2
+			- labels_height = 10 # procent
+			- labels_margin = 2
 
-				- day_margin = 1
+			- day_margin = 1
 
-				- day_count = 5
+			- day_count = 5
 
-				- dh = (100.0 - (day_count - 1) * day_margin - labels_height) / day_count # vyska 1 dne
-				- full_day_height = dh + day_margin
-				- min_hour = 9
-				- max_hour = 19
-				- min_time = (min_hour * 60) # 6 hodin
-				- max_time = ((max_hour + 1) * 60)
-				- wm = 100.0 / (max_time - min_time) # sirka 1 minuty, v procentech
-				.slot-container-outside
-					.slot-container
-						- (min_hour*60..max_hour*60).step(100).each do |time|
-							.time-label{style: "left: #{(time - min_time) * wm}%; height: 100%;"}
-								.inside{style: "height:  #{labels_height}%"}
-									%span= "%d:%02d" % [time / 60, time % 60]
+			- dh = (100.0 - (day_count - 1) * day_margin - labels_height) / day_count # vyska 1 dne
+			- full_day_height = dh + day_margin
+			- min_hour = 9
+			- max_hour = 19
+			- min_time = (min_hour * 60) # 6 hodin
+			- max_time = ((max_hour + 1) * 60)
+			- wm = 100.0 / (max_time - min_time) # sirka 1 minuty, v procentech
+			.slot-container-outside
+				.slot-container
+					- (min_hour*60..max_hour*60).step(100).each do |time|
+						.time-label{style: "left: #{(time - min_time) * wm}%; height: 100%;"}
+							.inside{style: "height:  #{labels_height}%"}
+								%span= "%d:%02d" % [time / 60, time % 60]
 
-						- slots.each do |slot|
-							- left = (slot.absolute_start_in_minutes - min_time) * wm
-							- top = slot.start_day * full_day_height + labels_height
-							- width = slot.duration_minutes * wm
-							- height = dh
-							- style = "position: absolute; left: #{left}%; top: #{top}%; width: #{width}%; height: #{height}%;"
-							%div{style: style}
-								.slot-block
-									%div{class: "slot slot-#{slot.type}", style: "width: 100%; height: 100%"}
-										.slot-contents-container
-											.name= agent.get_subject_by_code(slot.subject_code).name
-											.type= slot.type == :prednaska ? 'P' : 'Cv'
-											.place= slot.place
-											.teacher= slot.teacher_surnames
-											-# %div= slot.subject_code
+					- slots.each do |slot|
+						- left = (slot.absolute_start_in_minutes - min_time) * wm
+						- top = slot.start_day * full_day_height + labels_height
+						- width = slot.duration_minutes * wm
+						- height = dh
+						- style = "position: absolute; left: #{left}%; top: #{top}%; width: #{width}%; height: #{height}%;"
+						%div{style: style}
+							.slot-block
+								%div{class: "slot slot-#{slot.type}", style: "width: 100%; height: 100%"}
+									.slot-contents-container
+										.name= agent.get_subject_by_code(slot.subject_code).name
+										.type= slot.type == :prednaska ? 'P' : 'Cv'
+										.place= slot.place
+										.teacher= slot.teacher_surnames
+										-# %div= slot.subject_code
 
-		- 10.times do
-			= rozvrh
+		.male-rozvrhy
+			-#- 10.times do
+			-#	.rozvrh.small{style: "float: left; margin: 5px"}= rozvrh
+			-#.velky-rozvrh
+			- 1.times do
+				.rozvrh.large{style: "float: left; margin: 5px"}= rozvrh
+
