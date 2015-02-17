@@ -205,7 +205,7 @@ module Isko
 				next if slot.weird?
 
 				collisions = @all_slots.map { |slot2|
-					next if slot != slot2 || slot2.weird? || !slot.collision(slot2)
+					next if slot == slot2 || slot2.weird? || !slot.collision?(slot2)
 					choose_slot_var(slot2)
 				}.compact
 
@@ -241,12 +241,16 @@ module Isko
 			return if subjects.empty?
 			comment "#{points} pts per each of those subjects"
 			comment "(#{subjects.map { |s| get_subject_name(s) }.join(', ')})"
-			clause "#{new_reward_var} #= (#{subjects.map { |s| @choose_subject_vars[s] }.join(' + ')}) * #{points}"
+			clause <<-EOF.strip_heredoc
+				#{new_reward_var} #= (#{subjects.map { |s| @choose_subject_vars.fetch(s) }.join(' + ')}) * #{points}
+			EOF
 		end
 
 		def require_credits(credits, subjects)
 			comment "At least #{credits} credits from subjects #{subjects.to_a.join(', ')}"
-			clause "(#{subjects.map { |s| "(#{@choose_subject_vars[s]} * #{@agent.get_subject_credits(s)})" }.join(' + ')}) #>= #{credits}"
+			clause <<-EOF.strip_heredoc
+				(#{subjects.map { |s| "(#{@choose_subject_vars.fetch(s)} * #{@agent.get_subject_credits(s)})" }.join(' + ')}) #>= #{credits}"
+			EOF
 		end
 
 		def want_subjects_by_credits(subjects, mult = 1)

@@ -1,9 +1,11 @@
 module Isko
 	class Subject
-		def initialize(code: nil, name: nil, semester: nil, points: nil, credits: nil)
-			@code, @name, @semester, @points, @credits = code, name, semester, points, credits
+		def initialize(code: nil, name: nil, semester: nil,
+			credits: nil, requirements: nil)
+			@code, @name, @semester, @credits, @requirements =
+				code, name, semester, credits, requirements
 		end
 
-		attr_reader :code, :name, :semester, :points, :credits
+		attr_reader :code, :name, :semester, :credits, :requirements
 	end
 end

@@ -1,5 +1,6 @@
 #!/usr/bin/ruby -w
 
+require 'set'
 require 'isko'
 require 'isko/agent'
 require 'isko/prolog-gen'
@@ -16,122 +17,135 @@ unless File.exist?(file)
 	exit 1
 end
 
-specs = YAML.load_file(file)
-require 'set'
-@all_subject_codes = Set.new
+class TimetableOptimizer
+	def initialize(gen)
+		@gen = gen
+	end
+
+	def load_spec(file)
+		@specs = YAML.load_file(file)
+	end
+
+	def execute
+		@gen.add_subjects(all_subject_codes)
+		if @specs["requirements"]
+			requirements = @specs["requirements"]
+
+			require_subjects(requirements["subjects"])
+			require_at_least_x_credits(requirements["at_least_x_credits"])
+		end
+		if @specs["rewards"]
+			rewards = @specs["rewards"]
+
+			reward_free_days(rewards["free_days"])
+			reward_used_slots(rewards["used_slots"])
+			reward_subjects(rewards["subjects"])
+			reward_slot_periods(rewards["slot_periods"])
+		end
+
+		puts "Solving."
+		@gen.finish_and_execute
+	end
+
+	private
+
+	def all_subject_codes
+		codes = Set.new
+		if @specs["requirements"]
+			requirements = @specs["requirements"]
+			codes += requirements["subjects"] if requirements["subjects"]
+
+			if requirements["at_least_x_credits"]
+				requirements["at_least_x_credits"].each do |req|
+					case req["subjects"]
+					when Hash
+						codes += req["subjects"].keys
+					when Array
+						codes += req["subjects"]
+					else raise end
+				end
+			end
+		end
+
+		if @specs['rewards']
+			rewards = @specs['rewards']
+			codes += rewards['subjects'].keys if rewards['subjects']
+		end
+
+		codes
+	end
+
+	def reward_free_days(reward)
+		@gen.want_free_days(reward) if reward
+	end
+
+	def reward_used_slots(reward)
+		@gen.want_used_slots(reward) if reward
+	end
+
+	def reward_subjects(hash)
+		return unless hash
+		raise "Rewarded subjects should be a hash" unless hash.is_a? Hash
+		hash.each do |key, reward|
+			@gen.want_subjects([key], reward) unless reward == 0
+		end
+	end
+
+	def reward_slot_periods(periods)
+		return unless periods
+
+		periods.each do |period|
+			pstart, pend = Isko::Time.human_time_to_absolute_minutes(period["period_start"]),
+				Isko::Time.human_time_to_absolute_minutes(period["period_end"])
+			@gen.want_period(-> minute {
+				if period["negated"]
+					minute < pstart || minute > pend
+				else
+					minute >= pstart && minute <= pend
+				end
+			}, period["points"])
+		end
+	end
+
+	def require_subjects(subjects)
+		@gen.require_subjects(subjects) if subjects
+	end
+
+	def require_at_least_x_credits(array)
+		array.each do |requirement|
+			credits = requirement["credits"] or raise "Expecting credit requirement"
+			subjects = requirement["subjects"] or all_subject_codes
+
+			keys = case subjects
+						 when Array
+							 subjects
+						 when Hash
+							 subjects.keys
+						 when nil
+							 all_subject_codes
+						 else raise "Unexpected type of subjects field (#{subjects.class})" end
+
+			@gen.require_credits(credits, keys)
+
+			if subjects.is_a? Hash
+				subjects.each do |key, reward|
+					@gen.want_subjects([key], reward) unless reward == 0
+				end
+			end
+		end
+	end
+end
 
 @agent = Agent.new
 @gen = PrologGen.new("./code.prolog", @agent)
 
-# First load all mentioned subjects.
-if specs["requirements"]
-	requirements = specs["requirements"]
-
-	@all_subject_codes += requirements["subjects"] if requirements["subjects"]
-
-	if requirements["at_least_x_credits"]
-		requirements["at_least_x_credits"].each do |req|
-			case req["subjects"]
-			when Hash
-				@all_subject_codes += req["subjects"].keys
-			when Array
-				@all_subject_codes += req["subjects"]
-			end
-		end
-	end
-end
-
-if specs["rewards"]
-	rewards = specs["rewards"]
-	@all_subject_codes += rewards["subjects"].keys if rewards["subjects"]
-end
-
-@gen.add_subjects(@all_subject_codes)
-
-def require_subjects(subjects)
-	@gen.require_subjects(subjects) if subjects
-end
-
-def require_at_least_x_credits(array)
-	array.each do |requirement|
-		credits = requirement["credits"] or raise "Expecting credit requirement"
-		subjects = requirement["subjects"] or @all_subject_codes
-
-		keys = case subjects
-					 when Array
-						 subjects
-					 when Hash
-						 subjects.keys
-					 when nil
-						 @all_subject_codes
-					 else raise "Unexpected type of subjects field (#{subjects.class})" end
-
-		@gen.require_credits(credits, keys)
-
-		if subjects.is_a? Hash
-			subjects.each do |key, reward|
-				@gen.want_subjects([key], reward) unless reward == 0
-			end
-		end
-	end
-end
-
-if specs["requirements"]
-	requirements = specs["requirements"]
-
-	require_subjects(requirements["subjects"])
-	require_at_least_x_credits(requirements["at_least_x_credits"])
-end
-
-def reward_free_days(reward)
-	@gen.want_free_days(reward) if reward
-end
-
-def reward_used_slots(reward)
-	@gen.want_used_slots(reward) if reward
-end
-
-def reward_subjects(hash)
-	return unless hash
-	raise "Rewarded subjects should be a hash" unless hash.is_a? Hash
-	hash.each do |key, reward|
-		@gen.want_subjects([key], reward) unless reward == 0
-	end
-end
-
-def reward_slot_periods(periods)
-	return unless periods
-
-	periods.each do |period|
-		pstart, pend = Isko::Time.human_time_to_absolute_minutes(period["period_start"]),
-			Isko::Time.human_time_to_absolute_minutes(period["period_end"])
-		@gen.want_period(-> minute {
-			if period["negated"]
-				minute < pstart || minute > pend
-			else
-				minute >= pstart && minute <= pend
-			end
-		}, period["points"])
-	end
-end
-
-if specs["rewards"]
-	rewards = specs["rewards"]
-
-	reward_free_days(rewards["free_days"])
-	reward_used_slots(rewards["used_slots"])
-	reward_subjects(rewards["subjects"])
-	reward_slot_periods(rewards["slot_periods"])
-end
-
-puts "Solving."
-result = @gen.finish_and_execute
+optimizer = TimetableOptimizer.new(@gen)
+optimizer.load_spec(file)
+result = optimizer.execute
 
 if result[:slots].empty?
 	puts "Probably failed :("
-	return nil
+	exit 1
 end
 
 TimetableReporter.report_results(@agent, result, "outputs/output.html")
-
-# TODO: gen.want_subjects_by_credits(VSECHNY.keys)

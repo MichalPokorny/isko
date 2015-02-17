@@ -1,10 +1,12 @@
+require 'active_support/core_ext/string'
+
 module Isko
 	class PrologWriter
 		def initialize(prolog_path)
 			@prolog_path = prolog_path
 
 			@prolog = File.open(prolog_path, "w")
-			@prolog << <<-EOF
+			@prolog << <<-EOF.strip_heredoc
 				:-use_module(library(clpfd)).
 				main :-
 			EOF

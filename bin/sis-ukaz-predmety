@@ -10,20 +10,20 @@ include Isko
 agent = Agent.new
 
 if ARGV.empty?
-	puts "usage: predmet.rb (code1) (code2) ..."
+	puts "usage: sis-ukaz-predmety (code1) (code2) ..."
 	exit 1
 end
 
 def subject_to_table(s)
-	"#{s.code.rjust 10} #{s.name.ljust 30}#{Semester.to_human(s.semester).ljust 10}"
+	[ s.code, s.name, Semester.to_human(s.semester), s.credits, s.requirements ]
 end
 
 table = Terminal::Table.new do |t|
 	subjects = ARGV.map do |p|
 		begin
 			agent.get_subject_by_code(p)
-		rescue SisAgent::WrongFormat
-			puts "warning: #{p}: wrong format"
+		rescue Isko::Agent::WrongFormat => e
+			puts "warning: #{p}: wrong format (#{e.message})"
 	#	rescue => e
 	#		puts "warning: #{p}: nejde stahnout (#{e.inspect})"
 		end
@@ -33,7 +33,7 @@ table = Terminal::Table.new do |t|
 	summer = subjects.select { |s| s.semester == :summer }
 
 	winter.each do |s|
-		t << [ s.code, s.name, Semester.to_human(s.semester), s.credits ]
+		t << subject_to_table(s)
 	end
 
 	unless winter.empty? || summer.empty?
@@ -41,7 +41,7 @@ table = Terminal::Table.new do |t|
 	end
 
 	summer.each do |s|
-		t << [ s.code, s.name, Semester.to_human(s.semester), s.credits ]
+		t << subject_to_table(s)
 	end
 end
 

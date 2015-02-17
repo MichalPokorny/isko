@@ -32,6 +32,7 @@ module Isko
 		attr_reader :cache
 
 		public
+
 		def main_page
 			return @main_page if defined?(@main_page) && @main_page
 			page = @agent.get('https://is.cuni.cz/studium/index.php')
@@ -98,40 +99,37 @@ module Isko
 			table = page.search('.form_div table.tab2').first
 			raise unless table
 
-			data = {}
-			table.search("tr").to_a.map { |row|
-				data[row.search("th").first.content] = row.search("td").first.content
-			}
+			data = table.search("tr").to_a.map { |row|
+				[row.search("th").first.content, row.search("td").first.content]
+			}.to_h
 
 			title = page.search('div.form_div_title').last.content
 			raise unless title =~ /(.+) - #{code}$/
 			name = $1
 
-			points =
-				if data["Body:"] =~ /#{data["Semestr:"]} s.:(\d+)$/
-					$1
-				elsif data["Body:"] =~ /^ *(\d+)$/
-					$1
-				else
-					raise WrongFormat, "Unknown format: #{data["Body:"]}"
-				end.to_i
-
 			credits =
-				if data["E-Kredity:"] =~ /#{data["Semestr:"]} s.:(\d+)$/
+				if data["E-Kredity:"] =~ /#{data["Semestr:"]} s\.:(\d+)$/
 					$1
-				elsif data["E-Kredity:"] =~ /^ *(\d+)$/
+				elsif data["E-Kredity:"].strip =~ /^(\d+)$/
 					$1
 				else
 					raise WrongFormat, "Unknown format: #{data["E-Kredity:"]}"
 				end.to_i
+
+			requirements =
+				if data['Rozsah, examinace:'] =~ /.+ (Z|Zk|Z\+Zk) \[hodiny\/týden\]$/
+					$1
+				else
+					raise WrongFormat, "Can't parse #{data['Rozsah, examinace:']}"
+				end
 
 			begin
 				data = {
 					code: code,
 					name: name,
 					semester: Semester.from_human(data["Semestr:"]),
-					points: points,
-					credits: credits
+					credits: credits,
+					requirements: requirements
 				}
 
 				cache.save_yaml(cache_key, data)
@@ -219,30 +217,59 @@ module Isko
 			page
 		end
 
-		def get_subject_timetable_slots(code)
-			cache_key = "timetable_slots/#{code}.yml"
+		private
 
-			return cache.load_yaml(cache_key).map { |hash| TimetableSlot.new(hash) } if cache.contains?(cache_key)
-
-			page = subject_timetable_page(code)
-			table = page.search('table.tab1').last
-
-			rows = table.search('tr')
-			raise unless rows.count > 0
-
-			row_header = rows.shift.search('td').map(&:content).join(';')
-			raise unless row_header =~ /Název předmětu;Učitelé;Čas;Učebna;Délka;Přihlášeno studentů \(kapacita\);Studenti/
-
-			result = rows.map do |row|
-				conts = row.search('td').map(&:content).map(&:strip)
-				{
-					code: conts[7], teacher: conts[9], start: conts[10],
-					place: conts[11], duration_minutes: conts[12].to_i,
-					enrolled_students: conts[13].to_i, students_code: conts[14]
-				}
+		def try_cache(key)
+			if cache.contains?(key)
+				cache.load_yaml(key)
+			else
+				result = yield
+				cache.save_yaml(key, result)
+				result
 			end
+		end
 
-			cache.save_yaml(cache_key, result)
+		public
+
+		def get_subject_timetable_slots(code)
+			result = try_cache("timetable_slots/#{code}.yml") do
+				page = subject_timetable_page(code)
+				table = page.search('table.tab1').last
+
+				rows = table.search('tr')
+				raise unless rows.count > 0
+
+				row_header = rows.shift.search('td').map(&:content) #.join(';')
+
+				content_hashes = rows.map do |content_row|
+					row_hash = {}
+					row_header.zip(content_row.search('td').map(&:content)).each do |key_value_pair|
+						key, value = key_value_pair
+						next if key.empty?
+						raise if row_hash.key?(key)
+						row_hash[key] = value
+					end
+					row_hash
+				end
+
+				result = content_hashes.map do |row|
+					{
+						code: row.fetch('Kód lístku ( typ)'),
+						teacher: row.fetch('Učitelé'),
+						start: row.fetch('Čas'),
+						place: row.fetch('Učebna'),
+						duration_minutes: row.fetch('Délka').to_i,
+						enrolled_students: row.fetch('Přihlášeno studentů (kapacita)').to_i,
+						students_code: row.fetch('Studenti')
+					}
+				end
+			end
+#			return cache.load_yaml(cache_key).map { |hash| TimetableSlot.new(hash) } if cache.contains?(cache_key)
+
+			#unless row_header == ';;;;;;;;Název předmětu \( typ\);Učitelé;Čas;Učebna;Délka;Přihlášeno studentů \(kapacita\);Studenti'
+			#	raise "Unexpected row header #{row_header}"
+			#end
+
 			result.map { |hash| TimetableSlot.new(hash) }
 		end
 
