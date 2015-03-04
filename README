@@ -30,6 +30,9 @@ Umi to ale (v dobe posledniho updatu tohohle souboru) tohle:
 **Licence**
 GPL 3.0
 
+**Testy**
+`rake`
+
 **Generator rozvrhu**
 Je v `bin/sis-rozvrhovac`. Nainstaluj gem a spust tenhle soubor. (Z tohohle adresare. Je to sice fuj, ale zatim
 to staci.) Jako parametr zadej `timetable-requirements.yml.example`. Jestli vsechno dopadne dobre (povede se pristup

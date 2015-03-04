@@ -12,9 +12,8 @@ module Isko
 		end
 
 		def test_should_get_subject_by_code
-			code = "NAIL062"
 			agent = Agent.new(cache: NullCache.new)
-			assert(subject = agent.get_subject_by_code(code))
+			assert(subject = agent.get_subject_by_code("NAIL062"))
 			assert subject.is_a?(Subject) && subject.code == "NAIL062" && subject.name =~ /logika/
 		end
 
@@ -29,6 +28,11 @@ module Isko
 			agent = Agent.new(cache: NullCache.new)
 			assert(results = agent.exam_results)
 			assert results.is_a?(Array) && results.all? { |r| r.is_a? ExamResult }
+		end
+
+		def test_parse_requirements
+			agent = Agent.new(cache: NullCache.new)
+			assert agent.send(:parse_requirements, 'zimní s.:0/2 Z []') == 'Z'
 		end
 	end
 end

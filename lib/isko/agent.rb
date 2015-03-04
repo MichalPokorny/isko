@@ -48,11 +48,23 @@ module Isko
 			page
 		end
 
+		def warning(*args)
+			puts(*args)
+		end
+
 		def exam_results
 			link = main_page.link_with(text: /Výsledky zkoušek/) or raise "No link to exam results"
 			page = link.click
 
 			raise unless page.title =~ /Výsledky zkoušek - prohlížení/
+			form = page.form_with(id: 'skrform')
+
+			# XXX: hacky way of enabling every year
+			# TODO: dynamically select everything
+			form.checkboxes.each { |field|
+				field.checked = true
+			}
+			page = form.click_button
 
 			page.search("tr").map do |row|
 				next unless row['class'] =~ /row[12]/
@@ -62,13 +74,29 @@ module Isko
 
 				kod, vysledek = conts[2], conts[6].gsub("Z", "")
 
-				ExamResult.new(code: kod, result: (vysledek == "-" || vysledek.empty?) ? :credited : vysledek.to_i)
+				unless valid_mff_code?(kod)
+					warning "Skipping non-MFF subject: #{kod}"
+					next
+				end
+
+				ExamResult.new(
+					code: kod,
+					result: (vysledek == "-" || vysledek.empty?) ? :credited : vysledek.to_i
+				)
 			end.compact
 		end
 
 		def page_subtitle(page)
 			page.search('span#stev_podtitul_modulu').first.content
 		end
+
+		private
+
+		def valid_mff_code?(code)
+			code.start_with?('N')
+		end
+
+		public
 
 		def subject_search_page
 			return @subject_search_page if defined?(@subject_search_page) && @subject_search_page
@@ -82,6 +110,18 @@ module Isko
 		def subject_search_form
 			subject_search_page.form_with(id: 'filtr') or raise "subject search form not found"
 		end
+
+		private
+
+		def parse_requirements(raw_text)
+			if raw_text =~ /.+ (Z|Zk|Z\+Zk|KZ) (\[hodiny\/týden\]|\[dny\/semestr\]|\[\])$/
+				$1
+			else
+				raise WrongFormat, "Can't parse requirements: '#{raw_text}'"
+			end
+		end
+
+		public
 
 		def get_subject_by_code(code)
 			cache_key = "subjects/#{code}.yml"
@@ -116,20 +156,13 @@ module Isko
 					raise WrongFormat, "Unknown format: #{data["E-Kredity:"]}"
 				end.to_i
 
-			requirements =
-				if data['Rozsah, examinace:'] =~ /.+ (Z|Zk|Z\+Zk) \[hodiny\/týden\]$/
-					$1
-				else
-					raise WrongFormat, "Can't parse #{data['Rozsah, examinace:']}"
-				end
-
 			begin
 				data = {
 					code: code,
 					name: name,
 					semester: Semester.from_human(data["Semestr:"]),
 					credits: credits,
-					requirements: requirements
+					requirements: parse_requirements(data['Rozsah, examinace:'])
 				}
 
 				cache.save_yaml(cache_key, data)
@@ -140,7 +173,12 @@ module Isko
 		end
 
 		def get_subject_name(code)
-			get_subject_by_code(code).name
+			begin
+				get_subject_by_code(code).name
+			rescue
+				puts "Error while getting name of subject #{code}"
+				raise
+			end
 		end
 
 		def get_subject_credits(code)
