@@ -1,48 +1,11 @@
 #!/usr/bin/ruby -w
 
 require 'isko'
-require 'isko/agent'
-require 'isko/semester'
-require 'terminal-table'
-
-include Isko
-
-agent = Agent.new
+require 'isko/pp/subjects'
 
 if ARGV.empty?
 	puts "usage: sis-ukaz-predmety (code1) (code2) ..."
 	exit 1
 end
 
-def subject_to_table(s)
-	[ s.code, s.name, Semester.to_human(s.semester), s.credits, s.requirements ]
-end
-
-table = Terminal::Table.new do |t|
-	subjects = ARGV.map do |p|
-		begin
-			agent.get_subject_by_code(p)
-		rescue Isko::Agent::WrongFormat => e
-			puts "warning: #{p}: wrong format (#{e.message})"
-	#	rescue => e
-	#		puts "warning: #{p}: nejde stahnout (#{e.inspect})"
-		end
-	end.compact
-
-	winter = subjects.select { |s| s.semester == :winter }
-	summer = subjects.select { |s| s.semester == :summer }
-
-	winter.each do |s|
-		t << subject_to_table(s)
-	end
-
-	unless winter.empty? || summer.empty?
-		t << :separator
-	end
-
-	summer.each do |s|
-		t << subject_to_table(s)
-	end
-end
-
-puts table
+Isko::PrettyPrinter::Subjects.pretty_print(ARGV)
