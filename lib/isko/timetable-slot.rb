@@ -1,32 +1,17 @@
 require 'isko/days'
 require 'isko/time'
+require 'isko/slot-code'
 
 module Isko
 	class TimetableSlot
 		attr_reader :code, :teacher, :start, :place, :duration_minutes, :enrolled_students, :students_code
 
-		def initialize(code: nil, teacher: nil, start: nil, place: nil, duration_minutes: nil, enrolled_students: nil, students_code: nil)
-			@code, @teacher, @start, @place, @duration_minutes, @enrolled_students, @students_code =
-				code, teacher, start, place, duration_minutes.to_i, enrolled_students, students_code
-		end
-
-		def self.parse_slot_code(code)
-			unless match = /\A(\d{2})([ab])(.{4}\d{3})([xp])((\d+)[abcdef]*&*)\Z/.match(code)
-				raise "Unknown slot code format: #{code}"
-			end
-
-			{
-				year_code: match[1], semester_code: match[2], subject_code: match[3], slot_type_code: match[4].to_sym, extras: match[5]
-			}
-		end
-
-		def self.slot_code_to_subject_code(code)
-			parse_slot_code(code)[:subject_code]
-		end
-
-		def self.slot_code_to_type(code)
-			type = parse_slot_code(code)[:slot_type_code]
-			{ x: :cviceni, p: :prednaska }[type] or raise "Unknown slot type code: #{type}"
+		def initialize(code: nil, teacher: nil, start: nil, place: nil,
+									 duration_minutes: nil, enrolled_students: nil,
+									 students_code: nil)
+			@code = SlotCode.new(code)
+			@teacher, @start, @place, @duration_minutes, @enrolled_students, @students_code =
+				teacher, start, place, duration_minutes.to_i, enrolled_students, students_code
 		end
 
 		def weird?
@@ -61,19 +46,19 @@ module Isko
 		end
 
 		def subject_code
-			self.class.slot_code_to_subject_code(code)
+			@code.subject_code
 		end
 
 		def type
-			self.class.slot_code_to_type(code)
+			@code.slot_type
 		end
 
 		def prednaska?
-			self.class.parse_slot_code(code)[:slot_type_code] == :p
+			@code.prednaska?
 		end
 
 		def cviceni?
-			self.class.parse_slot_code(code)[:slot_type_code] == :x
+			@code.cviceni?
 		end
 
 		def teacher_surnames

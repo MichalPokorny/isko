@@ -1,5 +1,6 @@
 require 'mechanize'
 require 'csv'
+require 'date'
 require 'pp'
 require 'uri'
 require 'yaml'
@@ -11,21 +12,32 @@ require 'isko/days'
 require 'isko/cache'
 require 'isko/semester'
 require 'isko/exam-result'
+require 'isko/subject-code'
 
 module Isko
 	class Agent
 		class WrongFormat < StandardError; end
 		class InvalidCredentials < StandardError; end
 
-		def self.default_credentials
-			YAML.load_file(Pathname.new("~/.sis-credentials.yml").expand_path)
+		class Credentials
+			def self.default
+				hash = YAML.load_file(Pathname.new('~/.sis-credentials.yml').expand_path)
+				Credentials.new(login: hash['login'], password: hash['password'])
+			end
+
+			def initialize(login: nil, password: nil)
+				@login, @password = login, password
+			end
+
+			attr_reader :login, :password
 		end
 
-		def initialize(login: nil, password: nil, cache: nil)
-			creds = self.class.default_credentials
-			@login, @password = login || creds["login"], password || creds["password"]
+		def initialize(credentials: nil, cache: nil)
+			@credentials = credentials || Credentials.default
 			@cache = cache || Cache.new
 			@agent = Mechanize.new
+
+			@main_page = nil
 		end
 
 		protected
@@ -34,14 +46,14 @@ module Isko
 		public
 
 		def main_page
-			return @main_page if defined?(@main_page) && @main_page
+			return @main_page if @main_page
 			page = @agent.get('https://is.cuni.cz/studium/index.php')
 			form = page.form_with(name: 'flogin')
-			form.login = @login
-			form.heslo = @password
+			form.login = @credentials.login
+			form.heslo = @credentials.password
 			page = form.click_button
 
-			raise InvalidCredentials if page.content.include? "Zadali jste nespr" # avne prihlasovaci udaje...
+			raise InvalidCredentials if page.content.include? 'Zadali jste nespr' # avne prihlasovaci udaje...
 
 			@main_page = page or raise
 
@@ -74,7 +86,7 @@ module Isko
 
 				kod, vysledek = conts[2], conts[6].gsub("Z", "")
 
-				unless valid_mff_code?(kod)
+				unless SubjectCode.is_valid_mff?(kod)
 					warning "Skipping non-MFF subject: #{kod}"
 					next
 				end
@@ -89,14 +101,6 @@ module Isko
 		def page_subtitle(page)
 			page.search('span#stev_podtitul_modulu').first.content
 		end
-
-		private
-
-		def valid_mff_code?(code)
-			code.start_with?('N')
-		end
-
-		public
 
 		def subject_search_page
 			return @subject_search_page if defined?(@subject_search_page) && @subject_search_page
@@ -114,7 +118,7 @@ module Isko
 		private
 
 		def parse_requirements(raw_text)
-			if raw_text =~ /.+ (Z|Zk|Z\+Zk|KZ) (\[hodiny\/týden\]|\[dny\/semestr\]|\[\])$/
+			if raw_text =~ /.+ (Z|Zk|Z\+Zk|KZ|Z\(\+Zk\)) (\[hodiny\/týden\]|\[dny\/semestr\]|\[\])$/
 				$1
 			else
 				raise WrongFormat, "Can't parse requirements: '#{raw_text}'"
@@ -123,53 +127,55 @@ module Isko
 
 		public
 
+		# TODO: dump page.body for inspection on most failures to click on stuff
+
 		def get_subject_by_code(code)
-			cache_key = "subjects/#{code}.yml"
-			return Subject.new(cache.load_yaml(cache_key)) if cache.contains?(cache_key)
+			results = try_cache("subjects/#{code}.yml") do
+				puts "Cache miss: downloading subject metadata for [#{code}]"
+				# TODO: cache it
+				form = subject_search_form
+				form.kod = code
+				results_page = form.click_button
+				link = results_page.link_with(text: code.to_s)
+				raise "nemuzu otevrit predmet #{code}" unless link
+				page = link.click
+				raise unless page.title =~ /Předměty/
+				raise unless page_subtitle(page) =~ /Předmět/
 
-			# TODO: cache it
-			form = subject_search_form
-			form.kod = code
-			link = form.click_button.link_with(text: code.to_s)
-			raise "nemuzu otevrit predmet #{code}" unless link
-			page = link.click
-			raise unless page.title =~ /Předměty/
-			raise unless page_subtitle(page) =~ /Předmět/
+				table = page.search('.form_div table.tab2').first
+				raise unless table
 
-			table = page.search('.form_div table.tab2').first
-			raise unless table
+				data = table.search("tr").to_a.map { |row|
+					[row.search("th").first.content, row.search("td").first.content]
+				}.to_h
 
-			data = table.search("tr").to_a.map { |row|
-				[row.search("th").first.content, row.search("td").first.content]
-			}.to_h
+				title = page.search('div.form_div_title').last.content
+				raise unless title =~ /(.+) - #{code}$/
+				name = $1
 
-			title = page.search('div.form_div_title').last.content
-			raise unless title =~ /(.+) - #{code}$/
-			name = $1
+				credits =
+					if data["E-Kredity:"] =~ /#{data["Semestr:"]} s\.:(\d+)$/
+						$1
+					elsif data["E-Kredity:"].strip =~ /^(\d+)$/
+						$1
+					else
+						raise WrongFormat, "Unknown format: #{data["E-Kredity:"]}"
+					end.to_i
 
-			credits =
-				if data["E-Kredity:"] =~ /#{data["Semestr:"]} s\.:(\d+)$/
-					$1
-				elsif data["E-Kredity:"].strip =~ /^(\d+)$/
-					$1
-				else
-					raise WrongFormat, "Unknown format: #{data["E-Kredity:"]}"
-				end.to_i
-
-			begin
-				data = {
-					code: code,
-					name: name,
-					semester: Semester.from_human(data["Semestr:"]),
-					credits: credits,
-					requirements: parse_requirements(data['Rozsah, examinace:'])
-				}
-
-				cache.save_yaml(cache_key, data)
-				Subject.new(data)
-			rescue WrongFormat => e
-				raise "Wrong format of #{data.inspect}: #{e}"
+				begin
+					{
+						code: code,
+						name: name,
+						semester: Semester.from_human(data["Semestr:"]),
+						credits: credits,
+						requirements: parse_requirements(data['Rozsah, examinace:'])
+					}
+				rescue WrongFormat => e
+					raise "Wrong format of #{data.inspect}: #{e}"
+				end
 			end
+
+			Subject.new(results)
 		end
 
 		def get_subject_name(code)
@@ -194,7 +200,7 @@ module Isko
 
 		private
 		def parse_timetable_csv(page)
-			data = page.body.force_encoding("Windows-1250").encode("UTF-8")
+			data = page.body.force_encoding('Windows-1250').encode('UTF-8')
 			CSV.parse(data, col_sep: ?;)
 		end
 
@@ -210,7 +216,7 @@ module Isko
 			form['rezim'] = "kosik"
 			page = form.click_button
 
-			raise unless page.search("#tip").map(&:content).join =~ /pro definici a zobrazen/ # i vlasniho rozvrhu
+			raise unless page.search('#tip').map(&:content).join =~ /pro definici a zobrazen/ # i vlasniho rozvrhu
 
 			parse_timetabe_csv(page.link_with(href: /&csv=1$/).click)
 		end
@@ -271,6 +277,7 @@ module Isko
 
 		def get_subject_timetable_slots(code)
 			result = try_cache("timetable_slots/#{code}.yml") do
+				puts "Cache miss: downloading slots of subject #{code}"
 				page = subject_timetable_page(code)
 				table = page.search('table.tab1').last
 
@@ -290,35 +297,36 @@ module Isko
 					row_hash
 				end
 
-				result = content_hashes.map do |row|
+				content_hashes.map do |row|
 					{
 						code: row.fetch('Kód lístku ( typ)'),
 						teacher: row.fetch('Učitelé'),
 						start: row.fetch('Čas'),
-						place: row.fetch('Učebna'),
+						place: row.fetch('Učebna').strip,
 						duration_minutes: row.fetch('Délka').to_i,
 						enrolled_students: row.fetch('Přihlášeno studentů (kapacita)').to_i,
 						students_code: row.fetch('Studenti')
 					}
 				end
 			end
-#			return cache.load_yaml(cache_key).map { |hash| TimetableSlot.new(hash) } if cache.contains?(cache_key)
-
-			#unless row_header == ';;;;;;;;Název předmětu \( typ\);Učitelé;Čas;Učebna;Délka;Přihlášeno studentů \(kapacita\);Studenti'
-			#	raise "Unexpected row header #{row_header}"
-			#end
 
 			result.map { |hash| TimetableSlot.new(hash) }
 		end
 
 		def get_timetable_slot(code)
-			subject = TimetableSlot.slot_code_to_subject_code(code)
-			get_subject_timetable_slots(subject).select { |slot| slot.code == code }.first
+			code = SlotCode.new(code)
+			get_subject_timetable_slots(code.subject_code).select { |slot|
+				slot.code == code
+			}.first
 		end
 
 		def slot_timetable_page(code)
-			page = subject_timetable_page(TimetableSlot.slot_code_to_subject_code(code))
+			page = subject_timetable_page(SlotCode.new(code).subject_code)
 			page.link_with(href: /#{code}/).click
+		end
+
+		def finished_subject_codes
+			exam_results.map(&:code)
 		end
 
 		def all_slot_instances(code)
@@ -335,6 +343,19 @@ module Isko
 			}.map { |row|
 				Date.parse(row.search("td")[1].content)
 			}
+		end
+
+		def all_cs_slot_codes
+			try_cache("#{Date.today.strftime('%Y-%m-%d')}/all_cs_slots") do
+				buildings_page = timetable_ng_page.link_with(text: 'Budovy').click
+				# TODO: dynamic
+				bldg_page = buildings_page.link_with(text: 'Malostranské nám. 25, 118 00 Praha 1 (NMS)').click
+				%w{Pondělí Úterý Středa Čtvrtek Pátek}.flat_map do |day|
+					day_page = bldg_page.link_with(text: day).click
+					csv = parse_timetable_csv(day_page.link_with(href: /&csv=1$/).click)
+					check_csv_format!(csv).map(&:first)
+				end.compact  # reservations have no slot code
+			end
 		end
 	end
 end
