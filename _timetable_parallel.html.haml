@@ -1,0 +1,49 @@
+!!!
+%html
+	%head
+		%meta{charset: 'UTF-8'}
+		%link{rel: :stylesheet, href: 'css/bootstrap.min.css'}
+		%link{rel: :stylesheet, href: 'css/bootstrap-theme.min.css'}
+		%link{rel: :stylesheet, href: 'css/timetable-style.css'}
+	%body
+		.male-rozvrhy
+			.rozvrh.large
+				- min_hour = 9
+				- max_hour = 19
+				- min_time = (min_hour * 60) # 6 hodin
+				- max_time = ((max_hour + 1) * 60)
+				- wm = 100.0 / (max_time - min_time) # sirka 1 minuty, v procentech
+
+				- labels_margin = 2
+				- labels_height = 10 # procent
+				- day_count = 5
+				- day_margin = 1
+				- day_row_height = (100.0 - (day_count - 1) * day_margin - labels_height) / day_count
+
+				.slot-container-outside
+					.slot-container
+						- (min_hour*60..max_hour*60).step(100).each do |time|
+							.time-label{style: "left: #{(time - min_time) * wm}%; height: 100%;"}
+								.inside{style: "height:  #{labels_height}%"}
+									%span= "%d:%02d" % [time / 60, time % 60]
+
+						- total_rows_done = 0
+						- day_rows.each do |rows_of_day|
+							- rows_of_day.each do |row|
+								- row.each do |slot|
+									- left = (slot.absolute_start_in_minutes - min_time) * wm
+									- top = total_rows_done * day_row_height + labels_height
+									- width = slot.duration_minutes * wm
+									- height = day_row_height
+									- style = "position: absolute; left: #{left}%; top: #{top}%; width: #{width}%; height: #{height}%;"
+									%div{style: style}
+										.slot-block
+											%div{class: "slot slot-#{slot.type}", style: "width: 100%; height: 100%"}
+												.slot-contents-container
+													.name= agent.get_subject_by_code(slot.subject_code).name
+													.type= slot.type == :prednaska ? 'P' : 'Cv'
+													.place= slot.place
+													.teacher= slot.teacher_surnames
+												-# %div= slot.subject_code
+								- total_rows_done += 1
+							- total_rows_done += 1
