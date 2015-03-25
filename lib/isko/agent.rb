@@ -218,7 +218,7 @@ module Isko
 
 			raise unless page.search('#tip').map(&:content).join =~ /pro definici a zobrazen/ # i vlasniho rozvrhu
 
-			parse_timetabe_csv(page.link_with(href: /&csv=1$/).click)
+			parse_timetable_csv(page.link_with(href: /&csv=1$/).click)
 		end
 
 		private
