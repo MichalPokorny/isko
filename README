@@ -4,7 +4,7 @@ Nikdo by ji nemel pouzivat (i kdyby to nebylo zabugovane, je to porad zakazane :
 
 Ma to nejake zavislosti - prinejmensim Mechanize. Mozna z toho nekdy bude gem, ale to bych se musel dost nudit.
 
-Ocekava to heslo do SISu ulozene v ~/.sis-credentials.yml:
+Ocekava to heslo do SISu ulozene v ~/Dropbox/secrets/sis-credentials.yml:
 
 	---
 	login: "123123123"

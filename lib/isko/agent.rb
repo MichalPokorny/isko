@@ -21,7 +21,7 @@ module Isko
 
 		class Credentials
 			def self.default
-				hash = YAML.load_file(Pathname.new('~/.sis-credentials.yml').expand_path)
+				hash = YAML.load_file(Pathname.new('~/Dropbox/secrets/sis-credentials.yml').expand_path)
 				Credentials.new(login: hash['login'], password: hash['password'])
 			end
 
