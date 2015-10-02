@@ -21,7 +21,7 @@ module Isko
 		def start_day
 			Days.find(Time.parse_human(start)[:day])
 		rescue
-			puts "Failed to parse slot #{code} start day"
+			puts "Failed to parse slot #{code} start day: '#{start}'"
 			raise
 		end
 

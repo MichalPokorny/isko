@@ -39,5 +39,9 @@ module Isko
 		def ==(other)
 			code == other.code
 		end
+
+		def to_s
+			"#<Isko::SlotCode:#{object_id} #{code}>"
+		end
 	end
 end

@@ -112,6 +112,7 @@ class TimetableOptimizer
 	end
 
 	def require_at_least_x_credits(array)
+		return if array.nil?
 		array.each do |requirement|
 			credits = requirement["credits"] or raise "Expecting credit requirement"
 			subjects = requirement["subjects"] or all_subject_codes

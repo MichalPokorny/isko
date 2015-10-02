@@ -249,7 +249,7 @@ module Isko
 		def require_credits(credits, subjects)
 			comment "At least #{credits} credits from subjects #{subjects.to_a.join(', ')}"
 			clause <<-EOF.strip_heredoc
-				(#{subjects.map { |s| "(#{@choose_subject_vars.fetch(s)} * #{@agent.get_subject_credits(s)})" }.join(' + ')}) #>= #{credits}"
+				(#{subjects.map { |s| "(#{@choose_subject_vars.fetch(s)} * #{@agent.get_subject_credits(s)})" }.join(' + ')}) #>= #{credits}
 			EOF
 		end
 
