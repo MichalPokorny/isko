@@ -357,5 +357,67 @@ module Isko
 				end.compact  # reservations have no slot code
 			end
 		end
+
+		def enrollments_page
+			return @enrollments_page if @enrollments_page
+			link = main_page.link_with(text: /Zápis předmětů a rozvrhu/) or raise "No enrollment link"
+			page = link.click
+			raise unless page.title =~ /Zápis předmětů a rozvrhu/
+			@enrollments_page = page
+			return page
+		end
+
+		def all_enrolled_subjects
+			enrollments_page.search('table.tab1').each do |table|
+				contents = table.search('tr').map do |row|
+					next unless row['class'] =~ /row[12]/
+					row.search("td").map(&:content)
+				end.compact
+
+				next if contents.nil? or contents.empty? or contents.all?(&:nil?)
+
+				codes = contents.map { |rc| rc[7] }
+				return codes
+			end
+		end
+
+		def cancel_enrollment_link(subject_code)
+			cancellation_links = []
+			enrollments_page.links.each do |link|
+				onclick = link.node.attribute('onclick')
+				#puts link.node
+				next if onclick.nil?
+				onclick = onclick.to_s
+				#puts onclick
+				if onclick =~ /^javascript:js_confirm\('.+','(index\.php\?[^']+povinn[^']+)'\);return false;$/
+					puts "(is link to cancel #$1)"
+					cancellation_links << $1
+				end
+			end
+
+			cancellation_links.each do |cl|
+				if cl.include?(subject_code)
+					return cl
+				end
+			end
+
+			pp cancellation_links
+
+			raise "Cannot cancel the subject #{subject_code}...?"
+		end
+
+		def cancel_enrollment(subject_code)
+			page = @agent.click({'href' => cancel_enrollment_link(subject_code)})
+			unless page.content.force_encoding(Encoding::UTF_8).include?('Předmět odstraněn z předběžného zápisu')
+				page.save 'output-x.html'
+				raise "Cannot get rid of #{subject_code}?"
+			end
+		end
+
+		def cancel_all_enrollments
+			all_enrolled_subjects.each do |code|
+				cancel_enrollment(code)
+			end
+		end
 	end
 end
