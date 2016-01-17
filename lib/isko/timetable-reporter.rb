@@ -3,33 +3,28 @@ require 'haml'
 
 module Isko
 	module TimetableReporter
+		def self.slot_to_hash(agent, slot)
+			s = {
+				day: slot.start_day,
+				start: slot.absolute_start_in_minutes,
+				length: slot.duration_minutes,
+				code: slot.code,
+				subject_code: slot.subject_code,
+				type: slot.type,
+				teacher: slot.teacher,
+				weeks: slot.weeks
+			}
+			s[:subject_name] = agent.get_subject_name(slot.subject_code)
+			s
+		end
+
 		def self.report_results(agent, result, file)
 			shown = result[:slots].map { |slot|
-				s = {
-					day: slot.start_day,
-					start: slot.absolute_start_in_minutes,
-					length: slot.duration_minutes,
-					code: slot.code,
-					subject_code: slot.subject_code,
-					type: slot.type,
-					teacher: slot.teacher,
-				}
-				s[:subject_name] = agent.get_subject_name(slot.subject_code)
-				s
+				slot_to_hash(agent, slot)
 			}
 
 			outside_slots = result[:outside_slots].reject(&:weird?).map { |slot|
-				s = {
-					day: slot.start_day,
-					start: slot.absolute_start_in_minutes,
-					length: slot.duration_minutes,
-					code: slot.code,
-					subject_code: slot.subject_code,
-					type: slot.type,
-					teacher: slot.teacher,
-				}
-				s[:subject_name] = agent.get_subject_name(slot.subject_code)
-				s
+				slot_to_hash(agent, slot)
 			}
 
 			subjects = result[:subjects].map { |subject|

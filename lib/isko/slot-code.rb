@@ -13,6 +13,7 @@ module Isko
 			@extras = match[5]
 		end
 
+		attr_reader :extras
 		attr_reader :code
 		attr_reader :subject_code
 		attr_reader :slot_type_code

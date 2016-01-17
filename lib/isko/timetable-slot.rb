@@ -4,14 +4,15 @@ require 'isko/slot-code'
 
 module Isko
 	class TimetableSlot
-		attr_reader :code, :teacher, :start, :place, :duration_minutes, :enrolled_students, :students_code
+		attr_reader :code, :teacher, :start, :place, :duration_minutes, :enrolled_students, :capacity, :students_code, :weeks
 
 		def initialize(code: nil, teacher: nil, start: nil, place: nil,
 									 duration_minutes: nil, enrolled_students: nil,
-									 students_code: nil)
+									 capacity: nil,
+									 students_code: nil, weeks: nil)
 			@code = SlotCode.new(code)
-			@teacher, @start, @place, @duration_minutes, @enrolled_students, @students_code =
-				teacher, start, place, duration_minutes.to_i, enrolled_students, students_code
+			@teacher, @start, @place, @duration_minutes, @enrolled_students, @students_code, @weeks, @capacity =
+				teacher, start, place, duration_minutes.to_i, enrolled_students, students_code, weeks, capacity
 		end
 
 		def weird?
@@ -41,8 +42,22 @@ module Isko
 			! ((absolute_end_in_minutes <= other_slot.absolute_start_in_minutes) || (other_slot.absolute_end_in_minutes <= absolute_start_in_minutes))
 		end
 
+		def week_parities
+			case weeks
+			when :even
+				[:even]
+			when :odd
+				[:odd]
+			when :all
+				[:even, :odd]
+			else raise end
+		end
+
 		def collision?(other_slot)
-			start_day == other_slot.start_day && time_collision?(other_slot)
+			common_parities = week_parities & other_slot.week_parities
+			week_collision = !(common_parities.empty?)
+
+			week_collision && start_day == other_slot.start_day && time_collision?(other_slot)
 		end
 
 		def subject_code

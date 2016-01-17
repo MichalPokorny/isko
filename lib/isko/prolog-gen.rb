@@ -47,7 +47,7 @@ module Isko
 			bad = []
 			@all_slots.each do |slot|
 				next if slot.weird?
-				if hours_proc.call(slot.absolute_end_in_minutes) || hours_proc.call(slot.absolute_start_in_minutes)
+				if hours_proc.call(slot.absolute_end_in_minutes, slot.start_day) || hours_proc.call(slot.absolute_start_in_minutes, slot.start_day)
 					bad << choose_slot_var(slot)
 				end
 			end
@@ -76,6 +76,16 @@ module Isko
 		#	s
 		#end
 
+		def are_twopart_lectures(prednasky)
+			return false if prednasky.size != 2
+			codes = prednasky.map(&:code)
+
+			a, b = codes[0], codes[1]
+
+			# TODO: fix this
+			return (a.code == b.code + 'bb') || (b.code == a.code + 'bb')
+		end
+
 		def add_subject(code)
 			subject = @agent.get_subject_by_code(code)
 			comment "#{code} #{subject.name}, #{subject.credits} kr"
@@ -98,24 +108,40 @@ module Isko
 
 			raise "neunikatni kody slotu: #{slots.inspect}" unless slots.map(&:code).uniq.size == slots.size
 
-			unless prednasky.empty?
+			if are_twopart_lectures(prednasky)
 				var_prednaska = "#{code}_PREDNASKA"
-				clause "#{var_prednaska} in 0..#{prednasky.count}"
+				clause "#{var_prednaska} in 0..1"
 				# 0 == "nevybiram si nic"
 				clause "(#{var_prednaska} #= 0) #<==> (#\\ #{sv})"
 
-				prednaskove_sloty = []
 				prednasky.each.with_index do |slot, i|
 					var = "#{code}_PREDNASKA_#{i}"
-					comment "#{slot.start}, #{slot.duration_minutes} min"
+					comment "#{slot.code.code} #{slot.start}, #{slot.duration_minutes} min"
 					clause "#{var} in 0 \\/ 1"
-					clause "(#{var_prednaska} #= #{i + 1}) #<==> #{var}"
+					clause "(#{var_prednaska} #= 1) #<==> #{var}"
 					raise "dvojity slot: #{slot.code}" if @choose_slots_vars.key?(slot.code)
 					@choose_slots_vars[slot.code] = var
-					prednaskove_sloty << var
 				end
+			else
+				unless prednasky.empty?
+					var_prednaska = "#{code}_PREDNASKA"
+					clause "#{var_prednaska} in 0..#{prednasky.count}"
+					# 0 == "nevybiram si nic"
+					clause "(#{var_prednaska} #= 0) #<==> (#\\ #{sv})"
 
-				clause "(#{sv}) #<==> (#{prednaskove_sloty.join(" #\\/ ")})"
+					prednaskove_sloty = []
+					prednasky.each.with_index do |slot, i|
+						var = "#{code}_PREDNASKA_#{i}"
+						comment "#{slot.code.code} #{slot.start}, #{slot.duration_minutes} min"
+						clause "#{var} in 0 \\/ 1"
+						clause "(#{var_prednaska} #= #{i + 1}) #<==> #{var}"
+						raise "dvojity slot: #{slot.code}" if @choose_slots_vars.key?(slot.code)
+						@choose_slots_vars[slot.code] = var
+						prednaskove_sloty << var
+					end
+
+					clause "(#{sv}) #<==> (#{prednaskove_sloty.join(" #\\/ ")})"
+				end
 			end
 
 			unless cviceni.empty?
@@ -126,13 +152,20 @@ module Isko
 
 				cvikove_sloty = []
 				cviceni.each.with_index do |slot, i|
+					comment "#{slot.code.code} #{slot.start}, #{slot.duration_minutes} min"
+
 					var = "#{code}_CV_#{i}"
-					comment "#{slot.start}, #{slot.duration_minutes} min"
 					clause "#{var} in 0 \\/ 1"
 					clause "(#{var_cviko} #= #{i + 1}) #<==> #{var}"
 					raise if @choose_slots_vars.key?(slot.code)
 					@choose_slots_vars[slot.code] = var
 					cvikove_sloty << var
+
+					if slot.capacity == slot.enrolled_students
+						# Slot is full.
+						comment "Slot is full."
+						clause "#{var} #= 0"
+					end
 				end
 
 				clause "(#{sv}) #<==> (#{cvikove_sloty.join(' #\\/ ')})"
@@ -183,22 +216,22 @@ module Isko
 		def add_collisions
 			empty_line
 			comment "Collisions of slots"
-			comment "(By time slots)"
-			Days.each.with_index do |day, i|
-				comment "Collisions on #{day}"
-				slots = @all_slots.select { |slot| !slot.weird? && slot.start_day == i }
-				times = (slots.map(&:absolute_start_in_minutes) + slots.map(&:absolute_end_in_minutes)).sort.uniq
+			#comment "(By time slots)"
+			#Days.each.with_index do |day, i|
+			#	comment "Collisions on #{day}"
+			#	slots = @all_slots.select { |slot| !slot.weird? && slot.start_day == i }
+			#	times = (slots.map(&:absolute_start_in_minutes) + slots.map(&:absolute_end_in_minutes)).sort.uniq
 
-				times.each.with_index do |pend, j|
-					next if j == 0
-					pstart = times[j - 1]
-					slots_in = slots.select { |s| s.pure_time_collision?(pstart, pend) }
+			#	times.each.with_index do |pend, j|
+			#		next if j == 0
+			#		pstart = times[j - 1]
+			#		slots_in = slots.select { |s| s.pure_time_collision?(pstart, pend) }
 
-					next if slots_in.length < 2
-					comment "Collisions #{Time.absolute_minutes_to_human(pstart)} - #{Time.absolute_minutes_to_human(pend)}"
-					clause "(#{slots_in.map { |s| choose_slot_var(s) }.join(' + ')}) #=< 1"
-				end
-			end
+			#		next if slots_in.length < 2
+			#		comment "Collisions #{Time.absolute_minutes_to_human(pstart)} - #{Time.absolute_minutes_to_human(pend)}"
+			#		clause "(#{slots_in.map { |s| choose_slot_var(s) }.join(' + ')}) #=< 1"
+			#	end
+			#end
 
 			comment "(By explicit listing)"
 			@all_slots.each do |slot|

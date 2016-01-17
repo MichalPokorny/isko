@@ -11,6 +11,12 @@ include Isko
 require 'fileutils'
 FileUtils.mkdir_p('outputs')
 
+do_execute = false
+if ARGV[0] == '--execute'
+	do_execute = true
+	ARGV.shift
+end
+
 file = ARGV[0] || 'timetable-requirements.yml'
 unless File.exist?(file)
 	puts "Cannot load timetable requirements from #{file}."
@@ -97,12 +103,13 @@ class TimetableOptimizer
 		periods.each do |period|
 			pstart, pend = Isko::Time.human_time_to_absolute_minutes(period["period_start"]),
 				Isko::Time.human_time_to_absolute_minutes(period["period_end"])
-			@gen.want_period(-> minute {
-				if period["negated"]
-					minute < pstart || minute > pend
-				else
-					minute >= pstart && minute <= pend
-				end
+			@gen.want_period(-> minute, day {
+				time_within = if period["negated"]
+												minute < pstart || minute > pend
+											else
+												minute >= pstart && minute <= pend
+											end
+				time_within && (period['day'].nil? || Days.find(period['day']) == day)
 			}, period["points"])
 		end
 	end
@@ -150,3 +157,24 @@ if result[:slots].empty?
 end
 
 TimetableReporter.report_results(@agent, result, "outputs/output.html")
+
+if do_execute
+	puts "Executing this."
+	puts "Removing all previous enrollments."
+	@agent.cancel_all_enrollments
+
+	subjects = result[:slots].map(&:subject_code).uniq
+	subjects.each do |s|
+		puts "Subject #{s}:"
+		slots = result[:slots].select { |slot| slot.subject_code == s }
+
+		puts "Enrolling into #{s}: slots=#{slots.map(&:code).map(&:code).join('; ')}"
+		begin
+			@agent.enroll_into_subject(s, slots.map(&:code).map(&:code))
+		rescue Isko::Agent::EnrollSlotError
+			puts "Cannot enroll (possibly ignored slots) :("
+		rescue Isko::Agent::SlotsNotAvailable
+			puts "Cannot enroll, some slot is not available :("
+		end
+	end
+end

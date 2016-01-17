@@ -129,18 +129,23 @@ module Isko
 
 		# TODO: dump page.body for inspection on most failures to click on stuff
 
+		def subject_page(code)
+			form = subject_search_form
+			form.kod = code
+			# TODO: cache it
+			results_page = form.click_button
+			link = results_page.link_with(text: code.to_s)
+			raise "nemuzu otevrit predmet #{code}" unless link
+			page = link.click
+			raise unless page.title =~ /Předměty/
+			raise unless page_subtitle(page) =~ /Předmět/
+			return page
+		end
+
 		def get_subject_by_code(code)
 			results = try_cache("subjects/#{code}.yml") do
 				puts "Cache miss: downloading subject metadata for [#{code}]"
-				# TODO: cache it
-				form = subject_search_form
-				form.kod = code
-				results_page = form.click_button
-				link = results_page.link_with(text: code.to_s)
-				raise "nemuzu otevrit predmet #{code}" unless link
-				page = link.click
-				raise unless page.title =~ /Předměty/
-				raise unless page_subtitle(page) =~ /Předmět/
+				page = subject_page(code)
 
 				table = page.search('.form_div table.tab2').first
 				raise unless table
@@ -297,14 +302,34 @@ module Isko
 					row_hash
 				end
 
+				# hax
+				content_hashes.reject! { |row| row.fetch('Délka').include?('události') }
+
 				content_hashes.map do |row|
+					raise unless row.fetch('Délka') =~ /^(\d+) (Liché týdny|Sudé týdny|)\W*$/
+					length_minutes = $1.to_i
+					weeks = case $2
+								 when 'Liché týdny'
+									 :odd
+								 when 'Sudé týdny'
+									 :even
+								 when ''
+									 :all
+								 else raise end
+
+					raise unless row.fetch('Přihlášeno studentů (kapacita)') =~ /^(\d+)(\W+\((\d+)\))?\W*$/
+					enrolled = $1.to_i
+					capacity = $3 ? $3.to_i : 99999
+
 					{
 						code: row.fetch('Kód lístku ( typ)'),
 						teacher: row.fetch('Učitelé'),
 						start: row.fetch('Čas'),
 						place: row.fetch('Učebna').strip,
-						duration_minutes: row.fetch('Délka').to_i,
-						enrolled_students: row.fetch('Přihlášeno studentů (kapacita)').to_i,
+						duration_minutes: length_minutes,
+						weeks: weeks,
+						enrolled_students: enrolled,
+						capacity: capacity,
 						students_code: row.fetch('Studenti')
 					}
 				end
@@ -379,6 +404,8 @@ module Isko
 				codes = contents.map { |rc| rc[7] }
 				return codes
 			end
+
+			return []
 		end
 
 		def cancel_enrollment_link(subject_code)
@@ -390,7 +417,7 @@ module Isko
 				onclick = onclick.to_s
 				#puts onclick
 				if onclick =~ /^javascript:js_confirm\('.+','(index\.php\?[^']+povinn[^']+)'\);return false;$/
-					puts "(is link to cancel #$1)"
+					#puts "(is link to cancel #$1)"
 					cancellation_links << $1
 				end
 			end
@@ -418,6 +445,37 @@ module Isko
 			all_enrolled_subjects.each do |code|
 				cancel_enrollment(code)
 			end
+		end
+
+		class SlotsNotAvailable < StandardError; end
+		class EnrollSlotError < StandardError; end
+
+		def enroll_into_subject(code, slots)
+			raise unless slots.all? { |s| s.is_a?(String) }
+
+			selection_page = subject_page(code).link_with(text: 'Zapsat').click
+			candidates = selection_page.forms.select { |f| f.hidden_field?('do') && f['do'] == 'xzapsat_rl' }
+			selection_form = candidates.select { |f| f.method == 'POST' && f.action == 'index.php' }.first
+			raise unless selection_form
+			checked = 0
+			selection_form.radiobuttons.each do |btn|
+				if slots.include?(btn.value)
+					btn.check
+					checked += 1
+				end
+			end
+			unless checked == slots.size
+				raise SlotsNotAvailable, "Cannot select exactly the slots we asked for."
+			end
+			result = selection_form.submit
+			# TODO: assert the input exists, can be selected.
+			content = result.content.force_encoding(Encoding::UTF_8)
+			return if content.include?('Předmět zapsán') # OK
+			if content.include?('Musíte si vybrat od každého typu RL jeden lístek!')
+				raise EnrollSlotError
+			end
+
+			raise
 		end
 	end
 end

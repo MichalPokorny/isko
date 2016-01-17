@@ -32,7 +32,7 @@
 								%i= "(#{subject[:code]}, #{subject[:credits]} kr.)"
 								%ul
 									- subject[:slots].map do |slot|
-										%li den=#{slot[:day]} start=#{slot[:start]} length=#{slot[:length]} #{slot[:type]} #{slot[:teacher]}
+										%li den=#{slot[:day]} start=#{slot[:start]} length=#{slot[:length]} #{slot[:type]} #{slot[:teacher]} w=#{slot[:weeks]}
 
 				.col-xs-8
 					-# %pre= raw_output
