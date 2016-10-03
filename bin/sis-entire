@@ -1,0 +1,138 @@
+#!/usr/bin/ruby -w
+
+require 'isko'
+require 'isko/agent'
+require 'isko/timetable-slot'
+require 'isko/timetable-writer'
+require 'pp'
+
+agent = Isko::Agent.new
+finished_codes = agent.finished_subject_codes
+slots = agent.all_cs_slot_codes
+dropped = 0
+slots.reject! { |slot_code|
+	subject_code = Isko::SlotCode.new(slot_code).subject_code
+	if finished_codes.include?(subject_code)
+		dropped += 1
+		true
+	end
+}
+slots.map! { |slot_code| agent.get_timetable_slot(slot_code) }
+pp slots
+puts "dropped=#{dropped} remain=#{slots.size}"
+
+UNINTERESTING = [
+	'NPFL075', # prazsky zavislostni korpus
+	'NPFL096', # komputacni morfologie
+	'NPFL083', # lingvisticka teorie a gramaticke formalismy
+	'NTIN092', # diplomovy a dokt. seminar
+	'NPGR005', # spec. seminar z pocitacove grafiky
+	'NPFL068', # statisticke metody zpracovani prirozenych jazyku
+	'NPFL082', # informacni struktura very a vystavba diskurzu
+	'NPFL004', # seminar z formalni lingvistiky
+
+	'NTIN065', # vycislitelnost II
+	'NSWI058', # vyb. sem. z distr. a komp. sys. II
+	'NPFL070', # zdroje lingv. dat
+	'NOPT008', # algoritmy nelin. optimalizace
+	'NDIN012', # didaktika uziv. sw II
+	'NDIN013', # didaktika informatiky II
+	'NDBI039', # admin. MS MSQL serveru
+	'NTIN099', # alg. asp. bool. fci a parametrizovana slozitost
+	'NLTM015', # nestandardni seminar II
+	'NTIN097', # problemy na hyperkrychlich
+	'NDBI013', # administrace oracle
+	'NOPT053', # optimalizacni seminar
+	'NOPT015', # parametricka optimalizace
+	'NMAI064', # matematicky proseminar II
+	'NPGR024', # seminar z vedecke prace
+	'NTIN082', # strukt. slozitost II
+
+	'NDMI041', # komb. sem. pro pokrocile
+	'NAIL086', # evolucni algoritmy II
+	'NSWI037', # progr. pro windows II
+	'NPGR026', # predictive image synth. technologies
+	'NPFL087', # statisticky strojovy preklad
+	'NDMI083', # teorie matroidu II
+
+	'NMUE022', # zaklady algoritmizace a progr.
+	'NPFL079', # algor. rozp. mluvene reci
+	'NPGR028', # real-time raytracing
+	'NDMI087', # analyticka kombinatorika
+	'NDMI015', # kombinatoricke pocitani
+	'NAIL079', # lkalkulus a fp II
+	'NDBI006', # dot. jazyky II
+	'NAIL088', # inf. a kogn. vedy II
+	'NAIL077', # logicke progr. II
+	'NPFL099', # statisticke dialogove systemy
+	'NDIN014', # pedag.-did. propedeutika informatiky (wtf?)
+	'NOPT046', # zaklady spojite optimalizace
+	'NAIL015', # impl. neur. siti II
+	'NMUM162', # matematicky proseminar II
+	'NSWI021', # poc. site II
+	'NSWI104', # rizeni firem - systemova dynamika II
+	'NPFL110', # moderni metody v poc. ligv. II
+
+	'NTIN086', # vybr. kap. z vypoc. slozitosti
+	'NMAI068', # proseminar z MA
+	'NPRG044', # platformy NetBeans a Eclipse
+	'NSWI080', # middleware
+	'NPFL024', # syntakticka analyza cestiny
+	'NDMI082', # kombinatoricke etudy
+	'NSWI151', # administrace virtualizacni infrastruktury
+	'NTIN072', # sem. z apx a online alg.
+	'NDBI019', # stoch. metody v databazich
+	'NPOZ009', # odborne vyjadrovani a styl
+	'NUOS008', # seminar z poc. aplikaci
+	'NDMI014', # topologicke metody v informatice
+	'NAIL093', # seminar z psani vedeckych textu
+	'NSWI145', # webove sluzby
+
+	# Unuseful, uz mam vsechny povinne volitelne predmety hotove.
+	'NPRG036', # technologie XML
+	'NMAI042', # numericka matematika
+	'NAIL063', # teorie mnozin
+	'NPRG003', # metodika progr. a filozofie progr. jazyku
+	'NPFL106', # obecna lingvistika
+	'NSWI045', # rodina protokolu TCP/IP
+
+	# Unuseful, nemam prerekvizity
+	'NTIN063', # slozitost II
+	'NTIN074', # rekurze II
+	'NPRG021', # pokr. programovani na platforme Java
+
+	'NPRG043', # mam
+	'NAIL061', # skrz NPRG043
+	'NTIN017', # mam
+	'NDBI042', # mildly interesting, skrz NTIN017
+	'NSWE001', # mam
+	'NPRG050', # skrz NSWE001
+	'NAIL106', # multiagentni systemy - whatever
+	'NAIL065', # evolucni robotika - whatever
+
+	'NDMI058', # skrz matematicke struktury
+	'NSWI143', # skrz matematicke struktury
+	'NDMI036', # skrz matematicke struktury
+	'NDMI074', # mam
+	'NDBI023', # skrz algoritmy a jejich implementaci
+	'NPRG057', # skrz algoritmy a jejich implementaci
+	'NOPT016', # skrz algoritmy a jejich implementaci
+	'NPFL093', # skrz embedded
+	'NPGR004', # skrz embedded
+	'NSWI109', # skrz embedded
+	'NAIL102', # fil. problemy inf.
+	'NSWI153', # skrz embedded
+	'NSWI131', # skrz mat. struktury
+	'NSWI071', # not all that interesting
+	'NAIL013', # nemam neuronky :(
+	'NPGR019', # cvika skrz matematicke struktury
+	'NDBI021', # radsi pravd. robotika
+	'NPGR012', # radsi pravd. robotika
+	'NPGR023', # radsi pravd. robotika
+	'NMIB010', # unuseful
+	'NSWI122', # unuseful
+
+]
+slots.reject! { |slot| UNINTERESTING.include?(slot.subject_code) }
+
+Isko::TimetableWriter.report_results_parallel(agent, slots, "outputs/entire-schedule.html")

@@ -1,0 +1,65 @@
+#!/usr/bin/ruby -w
+
+require 'isko'
+require 'isko/agent'
+require 'isko/pp/subjects'
+require 'isko/static/specializations'
+require 'awesome_print'
+
+agent = Isko::Agent.new
+finished_codes = agent.finished_subject_codes
+finished_codes << 'NSWE001'
+
+subject_histogram = Hash.new
+
+Isko::Static::SPECIALIZATIONS.each do |name, components|
+	ap name
+
+	total_got = 0
+	total_need = 0
+
+	components.each do |key, subject_codes|
+		s_finished = subject_codes & finished_codes
+		ap s_finished
+
+		total_credits_done = s_finished.map { |code|
+			agent.get_subject_by_code(code)
+		}.map(&:credits).inject(&:+) || 0
+
+		next if key == :doporucene
+
+		required =
+			case key.to_s
+			when /^>=(\d+)$/
+				$1.to_i
+			when 'povinne'
+				subjects = subject_codes.map { |code|
+					agent.get_subject_by_code(code)
+				}
+				subjects.map(&:credits).inject(&:+)
+			else
+				raise
+			end
+
+		not_have = subject_codes - finished_codes
+		not_have.each do |subject_code|
+			subject_histogram[subject_code] ||= []
+			subject_histogram[subject_code] << name
+		end
+
+		total_got += total_credits_done
+		total_need += required
+		puts "#{key}: got #{total_credits_done} credits, #{required} are required; need #{required - total_credits_done} more"
+		Isko::PrettyPrinter::Subjects.pretty_print(not_have)
+		puts
+		#ap subject_codes
+	end
+	puts "Got #{total_got} of #{total_need} (%.2f%%)" % (total_got.to_f / total_need * 100)
+end
+
+subject_histogram.to_a.sort_by { |x| x[1].size }.reverse.each do |pair|
+	subject_code = pair[0]
+	subject = agent.get_subject_by_code(subject_code)
+	next if subject.semester != :summer
+	puts "#{subject_code} #{subject.name}: in #{pair[1]}"
+end
